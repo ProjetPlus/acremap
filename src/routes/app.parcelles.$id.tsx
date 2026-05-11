@@ -82,8 +82,9 @@ function ParcDetail() {
 
   function exportAs(kind: "geojson" | "kml" | "csv") {
     const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
-    if (kind === "geojson") downloadBlob(JSON.stringify(toGeoJSON(parc, m!, lots), null, 2), `${base}.geojson`, "application/geo+json");
-    else if (kind === "kml") downloadBlob(toKML(parc, m!, lots), `${base}.kml`, "application/vnd.google-earth.kml+xml");
+    const p = parc ?? null;
+    if (kind === "geojson") downloadBlob(JSON.stringify(toGeoJSON(p, m!, lots), null, 2), `${base}.geojson`, "application/geo+json");
+    else if (kind === "kml") downloadBlob(toKML(p, m!, lots), `${base}.kml`, "application/vnd.google-earth.kml+xml");
     else downloadBlob(toCSV(m!), `${base}-points.csv`, "text/csv");
   }
 

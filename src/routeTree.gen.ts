@@ -13,7 +13,12 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppValidationRouteImport } from './routes/app.validation'
+import { Route as AppUsersRouteImport } from './routes/app.users'
 import { Route as AppMeasureRouteImport } from './routes/app.measure'
+import { Route as AppHierarchieRouteImport } from './routes/app.hierarchie'
+import { Route as AppParcellesIndexRouteImport } from './routes/app.parcelles.index'
+import { Route as AppParcellesIdRouteImport } from './routes/app.parcelles.$id'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -35,9 +40,34 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppValidationRoute = AppValidationRouteImport.update({
+  id: '/validation',
+  path: '/validation',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppUsersRoute = AppUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMeasureRoute = AppMeasureRouteImport.update({
   id: '/measure',
   path: '/measure',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppHierarchieRoute = AppHierarchieRouteImport.update({
+  id: '/hierarchie',
+  path: '/hierarchie',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppParcellesIndexRoute = AppParcellesIndexRouteImport.update({
+  id: '/parcelles/',
+  path: '/parcelles/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppParcellesIdRoute = AppParcellesIdRouteImport.update({
+  id: '/parcelles/$id',
+  path: '/parcelles/$id',
   getParentRoute: () => AppRoute,
 } as any)
 
@@ -45,29 +75,74 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/app/hierarchie': typeof AppHierarchieRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/users': typeof AppUsersRoute
+  '/app/validation': typeof AppValidationRoute
   '/app/': typeof AppIndexRoute
+  '/app/parcelles/$id': typeof AppParcellesIdRoute
+  '/app/parcelles/': typeof AppParcellesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/app/hierarchie': typeof AppHierarchieRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/users': typeof AppUsersRoute
+  '/app/validation': typeof AppValidationRoute
   '/app': typeof AppIndexRoute
+  '/app/parcelles/$id': typeof AppParcellesIdRoute
+  '/app/parcelles': typeof AppParcellesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/app/hierarchie': typeof AppHierarchieRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/users': typeof AppUsersRoute
+  '/app/validation': typeof AppValidationRoute
   '/app/': typeof AppIndexRoute
+  '/app/parcelles/$id': typeof AppParcellesIdRoute
+  '/app/parcelles/': typeof AppParcellesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/login' | '/app/measure' | '/app/'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/login'
+    | '/app/hierarchie'
+    | '/app/measure'
+    | '/app/users'
+    | '/app/validation'
+    | '/app/'
+    | '/app/parcelles/$id'
+    | '/app/parcelles/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/app/measure' | '/app'
-  id: '__root__' | '/' | '/app' | '/login' | '/app/measure' | '/app/'
+  to:
+    | '/'
+    | '/login'
+    | '/app/hierarchie'
+    | '/app/measure'
+    | '/app/users'
+    | '/app/validation'
+    | '/app'
+    | '/app/parcelles/$id'
+    | '/app/parcelles'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/login'
+    | '/app/hierarchie'
+    | '/app/measure'
+    | '/app/users'
+    | '/app/validation'
+    | '/app/'
+    | '/app/parcelles/$id'
+    | '/app/parcelles/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -106,6 +181,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/validation': {
+      id: '/app/validation'
+      path: '/validation'
+      fullPath: '/app/validation'
+      preLoaderRoute: typeof AppValidationRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/users': {
+      id: '/app/users'
+      path: '/users'
+      fullPath: '/app/users'
+      preLoaderRoute: typeof AppUsersRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/measure': {
       id: '/app/measure'
       path: '/measure'
@@ -113,17 +202,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMeasureRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/hierarchie': {
+      id: '/app/hierarchie'
+      path: '/hierarchie'
+      fullPath: '/app/hierarchie'
+      preLoaderRoute: typeof AppHierarchieRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/parcelles/': {
+      id: '/app/parcelles/'
+      path: '/parcelles'
+      fullPath: '/app/parcelles/'
+      preLoaderRoute: typeof AppParcellesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/parcelles/$id': {
+      id: '/app/parcelles/$id'
+      path: '/parcelles/$id'
+      fullPath: '/app/parcelles/$id'
+      preLoaderRoute: typeof AppParcellesIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppHierarchieRoute: typeof AppHierarchieRoute
   AppMeasureRoute: typeof AppMeasureRoute
+  AppUsersRoute: typeof AppUsersRoute
+  AppValidationRoute: typeof AppValidationRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppParcellesIdRoute: typeof AppParcellesIdRoute
+  AppParcellesIndexRoute: typeof AppParcellesIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppHierarchieRoute: AppHierarchieRoute,
   AppMeasureRoute: AppMeasureRoute,
+  AppUsersRoute: AppUsersRoute,
+  AppValidationRoute: AppValidationRoute,
   AppIndexRoute: AppIndexRoute,
+  AppParcellesIdRoute: AppParcellesIdRoute,
+  AppParcellesIndexRoute: AppParcellesIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

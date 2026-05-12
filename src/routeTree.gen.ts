@@ -18,6 +18,7 @@ import { Route as AppUsersRouteImport } from './routes/app.users'
 import { Route as AppMeasureRouteImport } from './routes/app.measure'
 import { Route as AppHierarchieRouteImport } from './routes/app.hierarchie'
 import { Route as AppParcellesIndexRouteImport } from './routes/app.parcelles.index'
+import { Route as AppParcellesNewRouteImport } from './routes/app.parcelles.new'
 import { Route as AppParcellesIdRouteImport } from './routes/app.parcelles.$id'
 
 const LoginRoute = LoginRouteImport.update({
@@ -65,6 +66,11 @@ const AppParcellesIndexRoute = AppParcellesIndexRouteImport.update({
   path: '/parcelles/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppParcellesNewRoute = AppParcellesNewRouteImport.update({
+  id: '/parcelles/new',
+  path: '/parcelles/new',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppParcellesIdRoute = AppParcellesIdRouteImport.update({
   id: '/parcelles/$id',
   path: '/parcelles/$id',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/app/validation': typeof AppValidationRoute
   '/app/': typeof AppIndexRoute
   '/app/parcelles/$id': typeof AppParcellesIdRoute
+  '/app/parcelles/new': typeof AppParcellesNewRoute
   '/app/parcelles/': typeof AppParcellesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/app/validation': typeof AppValidationRoute
   '/app': typeof AppIndexRoute
   '/app/parcelles/$id': typeof AppParcellesIdRoute
+  '/app/parcelles/new': typeof AppParcellesNewRoute
   '/app/parcelles': typeof AppParcellesIndexRoute
 }
 export interface FileRoutesById {
@@ -105,6 +113,7 @@ export interface FileRoutesById {
   '/app/validation': typeof AppValidationRoute
   '/app/': typeof AppIndexRoute
   '/app/parcelles/$id': typeof AppParcellesIdRoute
+  '/app/parcelles/new': typeof AppParcellesNewRoute
   '/app/parcelles/': typeof AppParcellesIndexRoute
 }
 export interface FileRouteTypes {
@@ -119,6 +128,7 @@ export interface FileRouteTypes {
     | '/app/validation'
     | '/app/'
     | '/app/parcelles/$id'
+    | '/app/parcelles/new'
     | '/app/parcelles/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/app/validation'
     | '/app'
     | '/app/parcelles/$id'
+    | '/app/parcelles/new'
     | '/app/parcelles'
   id:
     | '__root__'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/app/validation'
     | '/app/'
     | '/app/parcelles/$id'
+    | '/app/parcelles/new'
     | '/app/parcelles/'
   fileRoutesById: FileRoutesById
 }
@@ -216,6 +228,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppParcellesIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/parcelles/new': {
+      id: '/app/parcelles/new'
+      path: '/parcelles/new'
+      fullPath: '/app/parcelles/new'
+      preLoaderRoute: typeof AppParcellesNewRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/parcelles/$id': {
       id: '/app/parcelles/$id'
       path: '/parcelles/$id'
@@ -233,6 +252,7 @@ interface AppRouteChildren {
   AppValidationRoute: typeof AppValidationRoute
   AppIndexRoute: typeof AppIndexRoute
   AppParcellesIdRoute: typeof AppParcellesIdRoute
+  AppParcellesNewRoute: typeof AppParcellesNewRoute
   AppParcellesIndexRoute: typeof AppParcellesIndexRoute
 }
 
@@ -243,6 +263,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppValidationRoute: AppValidationRoute,
   AppIndexRoute: AppIndexRoute,
   AppParcellesIdRoute: AppParcellesIdRoute,
+  AppParcellesNewRoute: AppParcellesNewRoute,
   AppParcellesIndexRoute: AppParcellesIndexRoute,
 }
 

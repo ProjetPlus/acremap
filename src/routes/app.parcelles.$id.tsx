@@ -113,10 +113,26 @@ function ParcDetail() {
               <h1 className="text-xl font-bold">{parc?.code ?? `Mesure ${m.id.slice(0, 6)}`}</h1>
               <StatusBadge status={m.status} />
             </div>
-            {parc && <div className="text-sm text-muted-foreground">{parc.ownerName}</div>}
+            {parc && (
+              <div className="text-sm text-muted-foreground">
+                {parc.ownerName}{parc.ownerPhone && ` · ${parc.ownerPhone}`}
+              </div>
+            )}
+            {sp && (
+              <div className="text-[11px] text-muted-foreground">
+                {sp.district} › {sp.region} › {sp.departement} › {sp.name}
+              </div>
+            )}
             <div className="text-xs text-muted-foreground mt-2 font-mono bg-muted rounded-md p-2 break-all">
               {reference}
             </div>
+            {parc && (parc.ownerPhoto || parc.groupPhoto || parc.parcellePhoto) && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {parc.ownerPhoto && <PhotoThumb src={parc.ownerPhoto} label="Propriétaire" />}
+                {parc.groupPhoto && <PhotoThumb src={parc.groupPhoto} label="Groupe" />}
+                {parc.parcellePhoto && <PhotoThumb src={parc.parcellePhoto} label="Parcelle" />}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-sm">
@@ -212,3 +228,13 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function PhotoThumb({ src, label }: { src: string; label: string }) {
+  return (
+    <a href={src} target="_blank" rel="noreferrer" className="block">
+      <img src={src} alt={label} className="w-full aspect-square object-cover rounded-lg border" />
+      <div className="text-[10px] text-muted-foreground text-center mt-1">{label}</div>
+    </a>
+  );
+}
+

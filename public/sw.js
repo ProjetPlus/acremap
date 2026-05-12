@@ -1,5 +1,5 @@
-// AcreMap Service Worker — cache shell + map tiles for offline use
-const CACHE = "acremap-v1";
+// AcreMap Service Worker — cache + tiles + notifications
+const CACHE = "acremap-v2";
 const TILE_CACHE = "acremap-tiles-v1";
 const SHELL = ["/", "/manifest.webmanifest"];
 
@@ -19,7 +19,6 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  // Cache map tiles aggressively for offline
   if (/tile\.openstreetmap|arcgisonline|tile\.thunderforest|stamen|esri/.test(url.hostname)) {
     event.respondWith(
       caches.open(TILE_CACHE).then(async (cache) => {
@@ -36,10 +35,57 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
-  // Network-first for navigations, fallback to cache
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request).catch(() => caches.match("/").then((r) => r || Response.error()))
     );
+  }
+});
+
+// Push notifications (serveur push à brancher plus tard).
+self.addEventListener("push", (event) => {
+  let payload = { title: "AcreMap", body: "Nouvelle notification", tag: "acremap", data: {} };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch {}
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      tag: payload.tag,
+      icon: "/favicon.ico",
+      badge: "/favicon.ico",
+      requireInteraction: true,
+      vibrate: [300, 100, 300, 100, 500],
+      data: payload.data,
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || "/app";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const c of clients) {
+        if ("focus" in c) { c.navigate(targetUrl); return c.focus(); }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+    })
+  );
+});
+
+// Permet de déclencher une notification depuis la page (postMessage).
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (data.type === "show-notification") {
+    self.registration.showNotification(data.title || "AcreMap", {
+      body: data.body || "",
+      tag: data.tag,
+      icon: "/favicon.ico",
+      badge: "/favicon.ico",
+      requireInteraction: true,
+      vibrate: [300, 100, 300, 100, 500],
+      data: data.data || {},
+    });
   }
 });

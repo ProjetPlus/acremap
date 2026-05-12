@@ -21,15 +21,22 @@ class AcreDB extends Dexie {
       lots: "id, parcelleId, code",
       meta: "key",
     });
+    // v2 — added geographic hierarchy fields and parcelle photos
+    this.version(2).stores({
+      users: "id, username, role",
+      sps: "id, code, district, region, departement",
+      domaines: "id, code, spId",
+      parcelles: "id, code, domaineId, ownerName",
+      measurements: "id, status, parcelleId, createdBy, createdAt",
+      lots: "id, parcelleId, code",
+      meta: "key",
+    });
   }
 }
 
 let _db: AcreDB | null = null;
 export function db(): AcreDB {
-  if (typeof window === "undefined") {
-    // SSR guard — return a dummy proxy that throws if used during SSR
-    throw new Error("DB only available in browser");
-  }
+  if (typeof window === "undefined") throw new Error("DB only available in browser");
   if (!_db) _db = new AcreDB();
   return _db;
 }

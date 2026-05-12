@@ -10,18 +10,42 @@ export interface User {
   createdAt: number;
 }
 
-export interface SP { id: string; code: string; name: string; departement: string; region: string; notes?: string; createdAt: number; }
-export interface Domaine { id: string; code: string; name: string; spId: string; description?: string; notes?: string; createdAt: number; }
+// Hiérarchie géographique : District → Région → Département → SP → Domaine → Parcelle → Lot
+export interface SP {
+  id: string;
+  code: string;             // SP001
+  name: string;             // Nom de la sous-préfecture (ex: Daloa)
+  district: string;         // ex: Sassandra-Marahoué
+  region: string;           // ex: Haut-Sassandra
+  departement: string;      // ex: Daloa
+  notes?: string;
+  createdAt: number;
+}
+
+export interface Domaine {
+  id: string;
+  code: string;             // DOM001
+  name: string;
+  spId: string;
+  description?: string;
+  notes?: string;
+  createdAt: number;
+}
+
 export interface Parcelle {
   id: string;
-  code: string;
+  code: string;             // PARC001
   ownerName: string;
+  ownerPhone?: string;
   domaineId: string;
   conventionDate: number;
   declaredArea?: number;
-  ownerPhone?: string;
   notes?: string;
   conventionStatus?: "PP" | "AC" | "EN_COURS";
+  // Photos stockées en base64 (data URL) — pas par URL externe
+  ownerPhoto?: string;      // photo du propriétaire
+  groupPhoto?: string;      // photo du groupe / famille
+  parcellePhoto?: string;   // photo de la parcelle
   createdAt: number;
 }
 
@@ -38,8 +62,8 @@ export interface Measurement {
   status: MeasurementStatus;
   validatedBy?: string;
   validatedAt?: number;
-  points: MeasurementPoint[];     // marked perimeter points
-  trace: GpsPoint[];               // full walked path (every reading)
+  points: MeasurementPoint[];
+  trace: GpsPoint[];
   areaM2: number;
   perimeterM: number;
   unit: "ha" | "m2" | "km2";
@@ -51,7 +75,7 @@ export interface Lot {
   id: string;
   parcelleId: string;
   measurementId: string;
-  code: string;            // H01..
+  code: string;
   polygon: { lat: number; lng: number }[];
   areaM2: number;
   assigneeName?: string;

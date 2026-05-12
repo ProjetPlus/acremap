@@ -228,3 +228,13 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function PhotoThumb({ src, label }: { src: string; label: string }) {
+  return (
+    <a href={src} target="_blank" rel="noreferrer" className="block">
+      <img src={src} alt={label} className="w-full aspect-square object-cover rounded-lg border" />
+      <div className="text-[10px] text-muted-foreground text-center mt-1">{label}</div>
+    </a>
+  );
+}
+

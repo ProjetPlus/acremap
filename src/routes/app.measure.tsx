@@ -1,5 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { z } from "zod";
 import { MapView } from "@/components/MapView";
 import {
   DEFAULT_GPS_CONFIG, captureStaticPoint, classifyAccuracy, estimateDeviceTier,
@@ -8,16 +10,26 @@ import {
 import { db, isBrowser } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import { formatArea, formatDistance } from "@/lib/format";
+import { feedbackError, feedbackMark, feedbackSuccess, unlockAudio, notify, requestNotificationPermission } from "@/lib/feedback";
 import type { GpsPoint, Measurement, MeasurementPoint } from "@/lib/types";
+
+const searchSchema = z.object({ parcelleId: z.string().optional() });
 
 export const Route = createFileRoute("/app/measure")({
   component: MeasurePage,
-  head: () => ({ meta: [{ title: "Nouvelle mesure GPS — AcreMap" }] }),
+  validateSearch: (s) => searchSchema.parse(s),
+  head: () => ({ meta: [{ title: "Mesure GPS terrain — AcreMap" }] }),
 });
 
 function MeasurePage() {
   const user = useAuth((s) => s.user);
   const navigate = useNavigate();
+  const { parcelleId } = Route.useSearch();
+
+  const linkedParcelle = useLiveQuery(async () => {
+    if (!isBrowser() || !parcelleId) return null;
+    return db().parcelles.get(parcelleId);
+  }, [parcelleId]);
 
   const [running, setRunning] = useState(false);
   const [satellite, setSatellite] = useState(true);
@@ -35,7 +47,7 @@ function MeasurePage() {
   const lastAutoRef = useRef<GpsPoint | null>(null);
   const watchRef = useRef<{ stop: () => void } | null>(null);
 
-  // Start GPS automatically
+  // Démarre le GPS
   useEffect(() => {
     if (!running) return;
     setError(null);
@@ -44,24 +56,22 @@ function MeasurePage() {
       setFilteredCur(filtered);
       if (raw.accuracy < bestAcc) setBestAcc(raw.accuracy);
       setAccSamples((s) => [...s.slice(-99), raw.accuracy]);
-      // append to trace only if accuracy reasonable & moved >1m
       setTrace((tr) => {
         const last = tr[tr.length - 1];
         if (raw.accuracy > 30) return tr;
         if (last && haversine(last, filtered) < 1) return tr;
         return [...tr, filtered];
       });
-      // distance from last marked point
       setPoints((pts) => {
         if (pts.length === 0) return pts;
         const last = pts[pts.length - 1];
         const d = haversine(last, filtered);
         setDistanceFromLast(d);
-        // Auto-mark every 100m
         if (autoMark100 && d >= DEFAULT_GPS_CONFIG.autoMarkEveryMeters &&
             (!lastAutoRef.current || haversine(lastAutoRef.current, filtered) >= DEFAULT_GPS_CONFIG.autoMarkEveryMeters)) {
           lastAutoRef.current = filtered;
-          beep();
+          feedbackMark();
+          notify("Point auto-marqué", `Point ${pts.length + 1} enregistré à 100 m du précédent.`, { tag: "auto-mark" });
           const next: MeasurementPoint = {
             index: pts.length + 1, samples: 1, auto: true,
             lat: filtered.lat, lng: filtered.lng, accuracy: filtered.accuracy, ts: Date.now(),
@@ -75,17 +85,10 @@ function MeasurePage() {
     return () => { handle.stop(); watchRef.current = null; };
   }, [running, autoMark100]);
 
-  function beep() {
-    try {
-      // @ts-ignore
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.frequency.value = 880; g.gain.value = 0.15;
-      o.start(); o.stop(ctx.currentTime + 0.12);
-      if ("vibrate" in navigator) navigator.vibrate(80);
-    } catch {}
+  async function startGps() {
+    await unlockAudio();
+    await requestNotificationPermission();
+    setRunning(true);
   }
 
   async function markPoint() {
@@ -98,8 +101,9 @@ function MeasurePage() {
       p.index = points.length + 1;
       setPoints((s) => [...s, p]);
       lastAutoRef.current = { lat: p.lat, lng: p.lng, accuracy: p.accuracy, ts: p.ts };
-      beep();
+      feedbackMark();
     } catch (e: any) {
+      feedbackError();
       setError(e.message ?? "Erreur de capture");
     } finally {
       setCapturing(null);
@@ -119,6 +123,7 @@ function MeasurePage() {
     const median = accVals[Math.floor(accVals.length / 2)] ?? bestAcc;
     const m: Measurement = {
       id: crypto.randomUUID(),
+      parcelleId: parcelleId || undefined,
       createdBy: user.id,
       createdAt: Date.now(),
       status: submit ? "submitted" : "draft",
@@ -137,6 +142,8 @@ function MeasurePage() {
       },
     };
     await db().measurements.put(m);
+    feedbackSuccess();
+    if (submit) await notify("Mesure soumise", `Levé envoyé à l'admin pour validation (${formatArea(m.areaM2, m.unit)}).`, { tag: "submit" });
     navigate({ to: "/app/parcelles/$id", params: { id: m.id } });
   }
 
@@ -149,6 +156,21 @@ function MeasurePage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] lg:h-screen">
+      {/* Bandeau parcelle liée */}
+      {linkedParcelle && (
+        <div className="px-3 py-2 bg-primary/10 border-b text-xs flex items-center gap-2">
+          <span className="font-semibold text-primary">Parcelle liée :</span>
+          <span className="truncate"><b>{linkedParcelle.code}</b> · {linkedParcelle.ownerName}</span>
+          <Link to="/app/parcelles/new" className="ml-auto text-[10px] underline text-muted-foreground">Changer</Link>
+        </div>
+      )}
+      {!linkedParcelle && (
+        <div className="px-3 py-2 bg-warn/10 border-b text-xs flex items-center gap-2">
+          <span className="text-warn font-semibold">Aucune parcelle sélectionnée.</span>
+          <Link to="/app/parcelles/new" className="ml-auto px-2 py-1 rounded bg-warn text-white text-[10px] font-semibold">Créer la parcelle d'abord</Link>
+        </div>
+      )}
+
       {/* Top status bar */}
       <div className="px-3 py-2 bg-card border-b flex items-center gap-2 text-xs flex-wrap">
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold
@@ -165,31 +187,23 @@ function MeasurePage() {
         </button>
       </div>
 
-      {/* Map */}
       <div className="flex-1 relative">
-        <MapView
-          satellite={satellite}
-          current={filteredCur}
-          currentAccuracy={filteredCur?.accuracy}
-          perimeter={points}
-          trace={trace}
-          guideTo={guideTo}
-          guideColor={guideColor}
-        />
+        <MapView satellite={satellite} current={filteredCur} currentAccuracy={filteredCur?.accuracy}
+          perimeter={points} trace={trace} guideTo={guideTo} guideColor={guideColor} />
         {!running && (
           <div className="absolute inset-0 bg-background/85 backdrop-blur-sm flex items-center justify-center p-6 z-10">
             <div className="bg-card rounded-2xl p-6 max-w-md text-center shadow-elevated">
               <h2 className="text-xl font-bold">Démarrer la mesure</h2>
               <p className="text-sm text-muted-foreground mt-2">
                 Positionnez-vous au point de départ (Point 1) puis marchez autour de la parcelle.
-                Le marquage automatique tous les 100 m et la trace verte se déclenchent dès l'acquisition GPS.
+                Bip puissant + vibration à chaque point auto-marqué (tous les 100 m).
               </p>
               <div className="text-xs text-warn bg-warn/10 rounded-md p-2 mt-3">
-                AcreMap utilise le GPS réel du téléphone. Les coordonnées affichées correspondent exactement à votre position. Le bornage légal reste réalisé par un géomètre.
+                AcreMap utilise le GPS réel du téléphone. Le bornage légal reste réalisé par un géomètre.
               </div>
-              <button onClick={() => setRunning(true)}
+              <button onClick={startGps}
                 className="mt-5 w-full h-12 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-secondary">
-                Activer le GPS et commencer
+                Activer GPS, son & notifications
               </button>
             </div>
           </div>
@@ -197,19 +211,18 @@ function MeasurePage() {
         {capturing && (
           <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-20">
             <div className="bg-card p-6 rounded-2xl max-w-xs text-center shadow-elevated">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">Capture statique en cours</div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Capture statique</div>
               <div className="text-3xl font-bold text-primary mt-2">{capturing.n} / {capturing.target}</div>
               <div className="text-xs text-muted-foreground mt-1">échantillons GPS · ±{capturing.acc.toFixed(1)} m</div>
               <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-primary transition-all" style={{ width: `${(capturing.n / capturing.target) * 100}%` }} />
               </div>
-              <p className="text-[11px] text-muted-foreground mt-3">Restez immobile. Moyennage pondéré pour reproductibilité.</p>
+              <p className="text-[11px] text-muted-foreground mt-3">Restez immobile.</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Bottom panel */}
       <div className="bg-card border-t p-3 lg:p-4 space-y-3">
         {error && <div className="text-xs text-destructive bg-destructive/10 px-3 py-1.5 rounded-md">{error}</div>}
 
@@ -261,7 +274,7 @@ function MeasurePage() {
           </button>
         </div>
         <p className="text-[10px] text-center text-muted-foreground">
-          Précision actuelle : ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"} m — Les superficies calculées sont des estimations de terrain. Le bornage définitif est réalisé par le géomètre.
+          Précision actuelle : ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"} m. Bornage définitif par géomètre.
         </p>
       </div>
     </div>

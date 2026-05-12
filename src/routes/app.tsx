@@ -1,19 +1,20 @@
-import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/lib/auth";
+import { useNavigate, Outlet } from "@tanstack/react-router";
+import { notificationPermission, requestNotificationPermission } from "@/lib/feedback";
 
 export const Route = createFileRoute("/app")({
   component: AppLayout,
 });
 
-const NAV: { to: string; label: string; icon: string; admin?: boolean }[] = [
-  { to: "/app", label: "Tableau de bord", icon: "home" },
-  { to: "/app/measure", label: "Nouvelle mesure", icon: "crosshair" },
-  { to: "/app/parcelles", label: "Parcelles", icon: "map" },
-  { to: "/app/hierarchie", label: "Hiérarchie", icon: "tree" },
-  { to: "/app/validation", label: "Validation", icon: "check", admin: true },
-  { to: "/app/users", label: "Utilisateurs", icon: "users", admin: true },
+const NAV: { to: string; label: string; short: string; icon: string; admin?: boolean }[] = [
+  { to: "/app", label: "Tableau de bord", short: "Accueil", icon: "home" },
+  { to: "/app/parcelles", label: "Parcelles & levés", short: "Parcelles", icon: "map" },
+  { to: "/app/hierarchie", label: "Hiérarchie", short: "Hiérarchie", icon: "tree" },
+  { to: "/app/validation", label: "Validation", short: "Valider", icon: "check", admin: true },
+  { to: "/app/users", label: "Utilisateurs", short: "Comptes", icon: "users", admin: true },
 ];
 
 function AppLayout() {
@@ -21,24 +22,34 @@ function AppLayout() {
   const signOut = useAuth((s) => s.signOut);
   const nav = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const [notifPerm, setNotifPerm] = useState<string>("default");
 
-  useEffect(() => {
-    if (!user) nav({ to: "/login" });
-  }, [user, nav]);
+  useEffect(() => { if (!user) nav({ to: "/login" }); }, [user, nav]);
 
-  // Register service worker
+  // Service Worker — désactivé dans les iframes / previews Lovable
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if (!("serviceWorker" in navigator)) return;
+    let inIframe = false;
+    try { inIframe = window.self !== window.top; } catch { inIframe = true; }
+    const isPreview =
+      typeof window !== "undefined" &&
+      (window.location.hostname.includes("id-preview--") ||
+       window.location.hostname.includes("lovableproject.com") ||
+       window.location.hostname.includes("lovable.app"));
+    if (inIframe || isPreview) {
+      navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
+      return;
     }
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
+
+  useEffect(() => { setNotifPerm(notificationPermission()); }, []);
 
   if (!user) return null;
   const items = NAV.filter((n) => !n.admin || user.role === "admin");
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-muted/30">
-      {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-64 flex-col bg-sidebar text-sidebar-foreground">
         <div className="p-5 border-b border-sidebar-border">
           <Logo className="h-9 w-9" showText />
@@ -57,8 +68,18 @@ function AppLayout() {
               </Link>
             );
           })}
+          <Link to="/app/parcelles/new"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm bg-accent/20 text-sidebar-foreground border border-accent/30 mt-3">
+            <Icon name="crosshair" /><span className="font-semibold">+ Nouveau levé GPS</span>
+          </Link>
         </nav>
         <div className="p-3 border-t border-sidebar-border space-y-2">
+          {notifPerm !== "granted" && notifPerm !== "unsupported" && (
+            <button onClick={async () => setNotifPerm(await requestNotificationPermission())}
+              className="w-full text-left px-3 py-2 rounded-lg text-xs bg-warn/20 text-sidebar-foreground border border-warn/30">
+              🔔 Activer notifications
+            </button>
+          )}
           <div className="px-3 py-2 text-xs">
             <div className="font-semibold text-sidebar-foreground">{user.fullName}</div>
             <div className="text-sidebar-foreground/60 capitalize">{user.role}</div>
@@ -70,20 +91,24 @@ function AppLayout() {
         </div>
       </aside>
 
-      {/* Mobile top bar */}
       <header className="lg:hidden flex items-center justify-between p-3 bg-card border-b">
         <Logo className="h-8 w-8" showText />
-        <button onClick={() => { signOut(); nav({ to: "/login" }); }}
-          className="text-xs px-3 py-1.5 rounded-md border">Sortie</button>
+        <div className="flex items-center gap-2">
+          {notifPerm !== "granted" && notifPerm !== "unsupported" && (
+            <button onClick={async () => setNotifPerm(await requestNotificationPermission())}
+              className="text-xs px-2.5 py-1.5 rounded-md bg-warn/20 text-warn border border-warn/30">🔔</button>
+          )}
+          <button onClick={() => { signOut(); nav({ to: "/login" }); }}
+            className="text-xs px-3 py-1.5 rounded-md border">Sortie</button>
+        </div>
       </header>
 
-      <main className="flex-1 min-w-0 pb-20 lg:pb-0">
+      <main className="flex-1 min-w-0 pb-24 lg:pb-0">
         <Outlet />
       </main>
 
-      {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-card border-t flex items-stretch justify-around z-30 safe-area-bottom">
-        {items.slice(0, 5).map((n) => {
+        {items.slice(0, 4).map((n) => {
           const active = path === n.to || (n.to !== "/app" && path.startsWith(n.to));
           return (
             <Link key={n.to} to={n.to}
@@ -91,10 +116,15 @@ function AppLayout() {
                 active ? "text-primary font-semibold" : "text-muted-foreground"
               }`}>
               <Icon name={n.icon} />
-              <span className="leading-none">{n.label.split(" ")[0]}</span>
+              <span className="leading-none">{n.short}</span>
             </Link>
           );
         })}
+        <Link to="/app/parcelles/new"
+          className="flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-0.5 bg-primary text-primary-foreground font-semibold">
+          <Icon name="crosshair" />
+          <span className="leading-none">Nouveau</span>
+        </Link>
       </nav>
     </div>
   );

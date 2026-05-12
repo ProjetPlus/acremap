@@ -3,6 +3,9 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { db, isBrowser } from "@/lib/db";
 import { nextSequentialCode } from "@/lib/ref";
+import {
+  listDistricts, regionsOfDistrict, departementsOfRegion, spsOfDepartement,
+} from "@/lib/ci-admin";
 
 export const Route = createFileRoute("/app/hierarchie")({
   component: HierarchiePage,
@@ -26,7 +29,7 @@ function HierarchiePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Hiérarchie AgriCapital</h1>
-          <p className="text-sm text-muted-foreground">Côte d'Ivoire › Haut-Sassandra › Daloa › SP › Domaine › Parcelle › Lot H</p>
+          <p className="text-sm text-muted-foreground">District › Région › Département › SP › Domaine › Parcelle › Lot H</p>
         </div>
         <button onClick={() => setModal({ kind: "sp" })}
           className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold">+ Sous-Préfecture</button>
@@ -47,7 +50,9 @@ function HierarchiePage() {
                 className="w-full text-left p-4 hover:bg-muted/60 flex items-center justify-between">
                 <div>
                   <div className="font-semibold">{sp.code} · {sp.name}</div>
-                  <div className="text-xs text-muted-foreground">{sp.departement}, {sp.region} · {doms.length} domaine(s)</div>
+                  <div className="text-xs text-muted-foreground">
+                    {sp.district} › {sp.region} › {sp.departement} · {doms.length} domaine(s)
+                  </div>
                 </div>
                 <span className="text-muted-foreground">{expanded ? "▴" : "▾"}</span>
               </button>
@@ -106,22 +111,26 @@ function HierarchiePage() {
 function CreateModal({ kind, parentId, data, onClose }: { kind: "sp" | "dom" | "parc"; parentId?: string; data: any; onClose: () => void }) {
   const [name, setName] = useState("");
   const [extra, setExtra] = useState("");
-  const [region, setRegion] = useState("Haut-Sassandra");
-  const [dept, setDept] = useState("Daloa");
+  const [district, setDistrict] = useState(listDistricts()[0] ?? "");
+  const [region, setRegion] = useState(regionsOfDistrict(district)[0] ?? "");
+  const [dept, setDept] = useState(departementsOfRegion(region)[0] ?? "");
 
   async function save() {
     if (!name.trim()) return;
     const d = db();
     if (kind === "sp") {
       const code = nextSequentialCode("SP", data.sps.map((x: any) => x.code));
-      await d.sps.put({ id: crypto.randomUUID(), code, name, departement: dept, region, createdAt: Date.now() });
+      await d.sps.put({
+        id: crypto.randomUUID(), code, name: name.trim(),
+        district, region, departement: dept, createdAt: Date.now(),
+      });
     } else if (kind === "dom" && parentId) {
       const code = nextSequentialCode("DOM", data.domaines.map((x: any) => x.code));
-      await d.domaines.put({ id: crypto.randomUUID(), code, name, spId: parentId, createdAt: Date.now() });
+      await d.domaines.put({ id: crypto.randomUUID(), code, name: name.trim(), spId: parentId, createdAt: Date.now() });
     } else if (kind === "parc" && parentId) {
       const code = nextSequentialCode("PARC", data.parcelles.map((x: any) => x.code));
       await d.parcelles.put({
-        id: crypto.randomUUID(), code, ownerName: name, domaineId: parentId,
+        id: crypto.randomUUID(), code, ownerName: name.trim(), domaineId: parentId,
         conventionDate: Date.now(), notes: extra || undefined, conventionStatus: "PP", createdAt: Date.now(),
       });
     }
@@ -140,15 +149,12 @@ function CreateModal({ kind, parentId, data, onClose }: { kind: "sp" | "dom" | "
             className="mt-1 w-full h-10 px-3 rounded-md border bg-background" />
         </label>
         {kind === "sp" && (
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block text-sm">
-              <span className="text-xs text-muted-foreground">Département</span>
-              <input value={dept} onChange={(e) => setDept(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border bg-background" />
-            </label>
-            <label className="block text-sm">
-              <span className="text-xs text-muted-foreground">Région</span>
-              <input value={region} onChange={(e) => setRegion(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border bg-background" />
-            </label>
+          <div className="space-y-2">
+            <Select label="District" value={district} options={listDistricts()}
+              onChange={(v) => { setDistrict(v); const r = regionsOfDistrict(v); setRegion(r[0] ?? ""); setDept(departementsOfRegion(r[0] ?? "")[0] ?? ""); }} />
+            <Select label="Région" value={region} options={regionsOfDistrict(district)}
+              onChange={(v) => { setRegion(v); setDept(departementsOfRegion(v)[0] ?? ""); }} />
+            <Select label="Département" value={dept} options={departementsOfRegion(region)} onChange={setDept} />
           </div>
         )}
         {kind === "parc" && (
@@ -163,5 +169,18 @@ function CreateModal({ kind, parentId, data, onClose }: { kind: "sp" | "dom" | "
         </div>
       </div>
     </div>
+  );
+}
+
+function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <label className="block text-sm">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <input list={`opts-${label}`} value={value} onChange={(e) => onChange(e.target.value)}
+        className="mt-1 w-full h-10 px-3 rounded-md border bg-background" />
+      <datalist id={`opts-${label}`}>
+        {options.map((o) => <option key={o} value={o} />)}
+      </datalist>
+    </label>
   );
 }

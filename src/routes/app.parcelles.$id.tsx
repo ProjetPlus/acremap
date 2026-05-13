@@ -8,6 +8,8 @@ import { formatArea, formatDate } from "@/lib/format";
 import { morceler } from "@/lib/morcellement";
 import { refOfficielle } from "@/lib/ref";
 import { downloadBlob, toCSV, toGeoJSON, toKML } from "@/lib/export";
+import { buildGeometrePdf } from "@/lib/pdf";
+import { haversine } from "@/lib/gps";
 import type { Lot } from "@/lib/types";
 import { StatusBadge } from "./app.index";
 

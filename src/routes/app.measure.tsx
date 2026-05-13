@@ -32,6 +32,7 @@ function MeasurePage() {
   }, [parcelleId]);
 
   const [running, setRunning] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [satellite, setSatellite] = useState(true);
   const [unit, setUnit] = useState<"ha" | "m2" | "km2">("ha");
   const [current, setCurrent] = useState<GpsPoint | null>(null);
@@ -44,18 +45,25 @@ function MeasurePage() {
   const [capturing, setCapturing] = useState<{ n: number; target: number; acc: number } | null>(null);
   const [autoMark100, setAutoMark100] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [pausedMs, setPausedMs] = useState(0);
   const lastAutoRef = useRef<GpsPoint | null>(null);
   const watchRef = useRef<{ stop: () => void } | null>(null);
+  const pausedRef = useRef(false);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   // Démarre le GPS
   useEffect(() => {
     if (!running) return;
     setError(null);
     const handle = startWatch((raw, filtered) => {
+      // En pause : on continue à afficher la position courante (pour montrer que GPS est vivant),
+      // mais on n'enregistre rien dans la trace ni dans les points auto-marqués.
       setCurrent(raw);
       setFilteredCur(filtered);
       if (raw.accuracy < bestAcc) setBestAcc(raw.accuracy);
       setAccSamples((s) => [...s.slice(-99), raw.accuracy]);
+      if (pausedRef.current) return;
       setTrace((tr) => {
         const last = tr[tr.length - 1];
         if (raw.accuracy > 30) return tr;

@@ -199,19 +199,41 @@ function ParcDetail() {
             )}
           </div>
 
+          {/* Tableau des côtés */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold">Côtés de la parcelle</h3>
+            <div className="max-h-40 overflow-y-auto border rounded-lg">
+              <table className="w-full text-[11px]">
+                <thead className="bg-muted sticky top-0">
+                  <tr><th className="text-left p-1.5">Segment</th><th className="text-right p-1.5">Longueur</th></tr>
+                </thead>
+                <tbody>
+                  {segments.map((s) => (
+                    <tr key={`${s.from}-${s.to}`} className="border-t">
+                      <td className="p-1.5">P{s.from} → P{s.to}</td>
+                      <td className="p-1.5 text-right font-mono">{s.d.toFixed(1)} m</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <h3 className="text-sm font-semibold">Exports</h3>
+            <button onClick={exportPdf}
+              className="w-full h-11 rounded-lg bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2">
+              📄 Document de travail géomètre (PDF)
+            </button>
             <div className="grid grid-cols-3 gap-2">
               <button onClick={() => exportAs("kml")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">KML</button>
               <button onClick={() => exportAs("geojson")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">GeoJSON</button>
               <button onClick={() => exportAs("csv")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">CSV</button>
             </div>
-            <div className="grid grid-cols-3 gap-2 opacity-50">
-              <button disabled className="h-10 rounded-md border text-xs">PDF</button>
-              <button disabled className="h-10 rounded-md border text-xs">DXF</button>
-              <button disabled className="h-10 rounded-md border text-xs">Shapefile</button>
+            <div className="text-[10px] text-muted-foreground">
+              Le PDF inclut références AgriCapital, plan schématique, coordonnées GPS, azimuts et longueurs des côtés.
+              Les exports DXF/Shapefile arriveront avec la connexion back-end.
             </div>
-            <div className="text-[10px] text-muted-foreground">PDF/DXF/Shapefile activés après validation back-end.</div>
           </div>
 
           <div className="space-y-2 pt-3 border-t">

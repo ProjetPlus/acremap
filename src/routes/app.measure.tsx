@@ -97,6 +97,24 @@ function MeasurePage() {
     await unlockAudio();
     await requestNotificationPermission();
     setRunning(true);
+    setStartedAt(Date.now());
+  }
+  function togglePause() {
+    setPaused((p) => {
+      const next = !p;
+      if (next) {
+        // entrée en pause
+        (window as any).__acrePauseStart = Date.now();
+        notify("Mesure en pause", "La trace et les marquages auto sont suspendus. Reprenez quand vous voulez.", { tag: "pause" });
+      } else {
+        const ps = (window as any).__acrePauseStart as number | undefined;
+        if (ps) setPausedMs((m) => m + (Date.now() - ps));
+        // Réinitialise lastAuto pour ne pas auto-marquer immédiatement après reprise
+        lastAutoRef.current = filteredCur ?? lastAutoRef.current;
+        notify("Mesure reprise", "Continuez votre tracé.", { tag: "resume" });
+      }
+      return next;
+    });
   }
 
   async function markPoint() {

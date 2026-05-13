@@ -216,6 +216,11 @@ function MeasurePage() {
       <div className="flex-1 relative">
         <MapView satellite={satellite} current={filteredCur} currentAccuracy={filteredCur?.accuracy}
           perimeter={points} trace={trace} guideTo={guideTo} guideColor={guideColor} />
+        {paused && running && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] px-4 py-2 rounded-full bg-warn text-white text-xs font-semibold shadow-elevated animate-pulse">
+            ⏸ Pause — déplacez-vous librement, rien n'est enregistré
+          </div>
+        )}
         {!running && (
           <div className="absolute inset-0 bg-background/85 backdrop-blur-sm flex items-center justify-center p-6 z-10">
             <div className="bg-card rounded-2xl p-6 max-w-md text-center shadow-elevated">

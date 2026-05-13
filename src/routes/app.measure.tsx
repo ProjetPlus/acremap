@@ -268,10 +268,19 @@ function MeasurePage() {
         )}
 
         <div className="flex gap-2">
-          <button onClick={markPoint} disabled={!running || !!capturing}
+          <button onClick={markPoint} disabled={!running || !!capturing || paused}
             className="flex-1 h-12 rounded-lg bg-accent text-accent-foreground font-semibold disabled:opacity-50">
             + Marquer un point
           </button>
+          {running && (
+            <button onClick={togglePause}
+              title={paused ? "Reprendre la mesure" : "Mettre en pause"}
+              className={`h-12 px-4 rounded-lg font-semibold ${
+                paused ? "bg-success text-white" : "bg-warn text-white"
+              }`}>
+              {paused ? "▶ Reprendre" : "⏸ Pause"}
+            </button>
+          )}
           <button onClick={undo} disabled={points.length === 0}
             className="h-12 px-4 rounded-lg border font-medium disabled:opacity-40">↶</button>
         </div>

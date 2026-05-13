@@ -90,6 +90,21 @@ function ParcDetail() {
     else downloadBlob(toCSV(m!), `${base}-points.csv`, "text/csv");
   }
 
+  function exportPdf() {
+    const blob = buildGeometrePdf({
+      measurement: m!, parcelle: parc ?? null, domaine: dom ?? null, sp: sp ?? null,
+      lots, operatorName: user?.fullName ?? "—",
+    });
+    const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
+    downloadBlob(blob, `${base}-document-travail.pdf`, "application/pdf");
+  }
+
+  // Calcul des segments (distance par côté)
+  const segments = m.points.map((p, i) => {
+    const next = m.points[(i + 1) % m.points.length];
+    return { from: i + 1, to: ((i + 1) % m.points.length) + 1, d: haversine(p, next) };
+  });
+
   return (
     <div className="lg:flex lg:h-screen">
       {/* Map */}

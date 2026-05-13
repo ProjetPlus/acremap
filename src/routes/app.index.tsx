@@ -65,15 +65,18 @@ function Dashboard() {
         {stats?.recent && stats.recent.length > 0 ? (
           <ul className="divide-y">
             {stats.recent.map((m) => (
-              <li key={m.id} className="p-4 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{m.parcelleId ?? "Mesure libre"}</div>
-                  <div className="text-xs text-muted-foreground">{formatDate(m.createdAt)} · {m.points.length} points</div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="font-semibold">{formatArea(m.areaM2)}</div>
-                  <StatusBadge status={m.status} />
-                </div>
+              <li key={m.id}>
+                <Link to="/app/parcelles/$id" params={{ id: m.id }}
+                  className="p-4 flex items-center justify-between gap-3 hover:bg-muted/40 transition-colors">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{m.parcelleId ? `Parcelle liée` : "Mesure libre"}</div>
+                    <div className="text-xs text-muted-foreground">{formatDate(m.createdAt)} · {m.points.length} points</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-semibold">{formatArea(m.areaM2)}</div>
+                    <StatusBadge status={m.status} />
+                  </div>
+                </Link>
               </li>
             ))}
           </ul>

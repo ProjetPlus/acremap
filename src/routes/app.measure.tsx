@@ -32,6 +32,7 @@ function MeasurePage() {
   }, [parcelleId]);
 
   const [running, setRunning] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [satellite, setSatellite] = useState(true);
   const [unit, setUnit] = useState<"ha" | "m2" | "km2">("ha");
   const [current, setCurrent] = useState<GpsPoint | null>(null);
@@ -44,18 +45,25 @@ function MeasurePage() {
   const [capturing, setCapturing] = useState<{ n: number; target: number; acc: number } | null>(null);
   const [autoMark100, setAutoMark100] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [pausedMs, setPausedMs] = useState(0);
   const lastAutoRef = useRef<GpsPoint | null>(null);
   const watchRef = useRef<{ stop: () => void } | null>(null);
+  const pausedRef = useRef(false);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   // Démarre le GPS
   useEffect(() => {
     if (!running) return;
     setError(null);
     const handle = startWatch((raw, filtered) => {
+      // En pause : on continue à afficher la position courante (pour montrer que GPS est vivant),
+      // mais on n'enregistre rien dans la trace ni dans les points auto-marqués.
       setCurrent(raw);
       setFilteredCur(filtered);
       if (raw.accuracy < bestAcc) setBestAcc(raw.accuracy);
       setAccSamples((s) => [...s.slice(-99), raw.accuracy]);
+      if (pausedRef.current) return;
       setTrace((tr) => {
         const last = tr[tr.length - 1];
         if (raw.accuracy > 30) return tr;
@@ -89,6 +97,24 @@ function MeasurePage() {
     await unlockAudio();
     await requestNotificationPermission();
     setRunning(true);
+    setStartedAt(Date.now());
+  }
+  function togglePause() {
+    setPaused((p) => {
+      const next = !p;
+      if (next) {
+        // entrée en pause
+        (window as any).__acrePauseStart = Date.now();
+        notify("Mesure en pause", "La trace et les marquages auto sont suspendus. Reprenez quand vous voulez.", { tag: "pause" });
+      } else {
+        const ps = (window as any).__acrePauseStart as number | undefined;
+        if (ps) setPausedMs((m) => m + (Date.now() - ps));
+        // Réinitialise lastAuto pour ne pas auto-marquer immédiatement après reprise
+        lastAutoRef.current = filteredCur ?? lastAutoRef.current;
+        notify("Mesure reprise", "Continuez votre tracé.", { tag: "resume" });
+      }
+      return next;
+    });
   }
 
   async function markPoint() {
@@ -190,6 +216,11 @@ function MeasurePage() {
       <div className="flex-1 relative">
         <MapView satellite={satellite} current={filteredCur} currentAccuracy={filteredCur?.accuracy}
           perimeter={points} trace={trace} guideTo={guideTo} guideColor={guideColor} />
+        {paused && running && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] px-4 py-2 rounded-full bg-warn text-white text-xs font-semibold shadow-elevated animate-pulse">
+            ⏸ Pause — déplacez-vous librement, rien n'est enregistré
+          </div>
+        )}
         {!running && (
           <div className="absolute inset-0 bg-background/85 backdrop-blur-sm flex items-center justify-center p-6 z-10">
             <div className="bg-card rounded-2xl p-6 max-w-md text-center shadow-elevated">
@@ -242,10 +273,19 @@ function MeasurePage() {
         )}
 
         <div className="flex gap-2">
-          <button onClick={markPoint} disabled={!running || !!capturing}
+          <button onClick={markPoint} disabled={!running || !!capturing || paused}
             className="flex-1 h-12 rounded-lg bg-accent text-accent-foreground font-semibold disabled:opacity-50">
             + Marquer un point
           </button>
+          {running && (
+            <button onClick={togglePause}
+              title={paused ? "Reprendre la mesure" : "Mettre en pause"}
+              className={`h-12 px-4 rounded-lg font-semibold ${
+                paused ? "bg-success text-white" : "bg-warn text-white"
+              }`}>
+              {paused ? "▶ Reprendre" : "⏸ Pause"}
+            </button>
+          )}
           <button onClick={undo} disabled={points.length === 0}
             className="h-12 px-4 rounded-lg border font-medium disabled:opacity-40">↶</button>
         </div>

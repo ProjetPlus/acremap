@@ -63,13 +63,41 @@ export function MapView(props: Props) {
 
   function addTile(map: LMap, satellite?: boolean) {
     import("leaflet").then(({ default: L }) => {
-      const url = satellite
-        ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-      const attr = satellite ? "Tiles © Esri" : "© OpenStreetMap";
-      const tile = L.tileLayer(url, { maxZoom: 21, attribution: attr });
-      tile.addTo(map);
-      layersRef.current.tile = tile;
+      // Satellite "hybride" : Google Hybrid (s,h) — imagerie haute résolution + libellés
+      // Repli automatique sur Esri World Imagery + Esri Reference (labels) en cas d'échec
+      const group = L.layerGroup();
+      if (satellite) {
+        const google = L.tileLayer(
+          "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+          { subdomains: ["0", "1", "2", "3"], maxZoom: 21, maxNativeZoom: 21,
+            attribution: "Imagerie © Google", crossOrigin: true }
+        );
+        const esriImg = L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          { maxZoom: 21, attribution: "Imagerie © Esri" }
+        );
+        const esriLabels = L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+          { maxZoom: 21, opacity: 0.85 }
+        );
+        google.on("tileerror", () => {
+          // Si Google échoue (zones bloquées / réseau), bascule sur Esri
+          if (!group.hasLayer(esriImg)) { google.remove(); esriImg.addTo(group); }
+        });
+        google.addTo(group);
+        esriLabels.addTo(group);
+      } else {
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19, attribution: "© OpenStreetMap"
+        }).addTo(group);
+      }
+      group.addTo(map);
+      layersRef.current.tile = group;
+      // Échelle métrique
+      if (!(map as any)._acreScale) {
+        L.control.scale({ metric: true, imperial: false, position: "bottomleft" }).addTo(map);
+        (map as any)._acreScale = true;
+      }
     });
   }
 

@@ -64,12 +64,19 @@ function MeasurePage() {
       // mais on n'enregistre rien dans la trace ni dans les points auto-marqués.
       setCurrent(raw);
       setFilteredCur(filtered);
-      if (raw.accuracy < bestAcc) setBestAcc(raw.accuracy);
-      setAccSamples((s) => [...s.slice(-99), raw.accuracy]);
+      const accepted = raw.accuracy <= DEFAULT_GPS_CONFIG.maxAcceptableAccuracy;
+      if (accepted) {
+        if (raw.accuracy < bestAcc) setBestAcc(raw.accuracy);
+        setAccSamples((s) => [...s.slice(-199), raw.accuracy]);
+        setAcceptedCount((c) => c + 1);
+      } else {
+        setRejectedCount((c) => c + 1);
+      }
+      setQaHistory((h) => [...h.slice(-29), { ts: raw.ts, acc: raw.accuracy, ok: accepted }]);
       if (pausedRef.current) return;
       setTrace((tr) => {
         const last = tr[tr.length - 1];
-        if (raw.accuracy > 30) return tr;
+        if (!accepted) return tr;
         if (last && haversine(last, filtered) < 1) return tr;
         return [...tr, filtered];
       });

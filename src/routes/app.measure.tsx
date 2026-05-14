@@ -288,6 +288,31 @@ function MeasurePage() {
           </div>
         )}
 
+        {/* Contrôle qualité GPS — live */}
+        {running && (
+          <div className={`rounded-lg border p-2.5 text-[11px] ${qaReady ? "bg-success/5 border-success/30" : "bg-warn/5 border-warn/30"}`}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-semibold text-xs">
+                {qaReady ? "✓ Qualité GPS validée" : "◌ Contrôle qualité en cours"}
+              </span>
+              <span className="text-muted-foreground">
+                {acceptedCount} acceptés / {rejectedCount} rejetés ({acceptRate}%)
+              </span>
+            </div>
+            <div className="flex items-end gap-0.5 h-8">
+              {qaHistory.slice(-30).map((q, i) => {
+                const h = Math.max(8, Math.min(32, 32 - q.acc * 0.8));
+                const cls = !q.ok ? "bg-destructive" : q.acc <= 5 ? "bg-success" : q.acc <= 10 ? "bg-warn" : "bg-orange-500";
+                return <div key={i} className={`flex-1 rounded-sm ${cls}`} style={{ height: `${h}px` }} title={`±${q.acc.toFixed(1)}m ${q.ok ? "ok" : "rejeté"}`} />;
+              })}
+              {qaHistory.length === 0 && <span className="text-muted-foreground text-[10px]">En attente du signal…</span>}
+            </div>
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              Seuil acceptation ≤{DEFAULT_GPS_CONFIG.maxAcceptableAccuracy} m · médiane ±{medianAcc != null ? medianAcc.toFixed(1) : "—"} m · meilleure ±{bestAcc < 999 ? bestAcc.toFixed(1) : "—"} m
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <button onClick={markPoint} disabled={!running || !!capturing || paused}
             className="flex-1 h-12 rounded-lg bg-accent text-accent-foreground font-semibold disabled:opacity-50">

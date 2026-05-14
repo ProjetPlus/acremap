@@ -42,6 +42,9 @@ function MeasurePage() {
   const [distanceFromLast, setDistanceFromLast] = useState(0);
   const [bestAcc, setBestAcc] = useState<number>(999);
   const [accSamples, setAccSamples] = useState<number[]>([]);
+  const [rejectedCount, setRejectedCount] = useState(0);
+  const [acceptedCount, setAcceptedCount] = useState(0);
+  const [qaHistory, setQaHistory] = useState<{ ts: number; acc: number; ok: boolean }[]>([]);
   const [capturing, setCapturing] = useState<{ n: number; target: number; acc: number } | null>(null);
   const [autoMark100, setAutoMark100] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,12 +64,19 @@ function MeasurePage() {
       // mais on n'enregistre rien dans la trace ni dans les points auto-marqués.
       setCurrent(raw);
       setFilteredCur(filtered);
-      if (raw.accuracy < bestAcc) setBestAcc(raw.accuracy);
-      setAccSamples((s) => [...s.slice(-99), raw.accuracy]);
+      const accepted = raw.accuracy <= DEFAULT_GPS_CONFIG.maxAcceptableAccuracy;
+      if (accepted) {
+        if (raw.accuracy < bestAcc) setBestAcc(raw.accuracy);
+        setAccSamples((s) => [...s.slice(-199), raw.accuracy]);
+        setAcceptedCount((c) => c + 1);
+      } else {
+        setRejectedCount((c) => c + 1);
+      }
+      setQaHistory((h) => [...h.slice(-29), { ts: raw.ts, acc: raw.accuracy, ok: accepted }]);
       if (pausedRef.current) return;
       setTrace((tr) => {
         const last = tr[tr.length - 1];
-        if (raw.accuracy > 30) return tr;
+        if (!accepted) return tr;
         if (last && haversine(last, filtered) < 1) return tr;
         return [...tr, filtered];
       });
@@ -179,6 +189,11 @@ function MeasurePage() {
   const accClass = filteredCur ? classifyAccuracy(filteredCur.accuracy) : "bad";
   const guideColor: "red" | "orange" = points.length === 3 ? "red" : "orange";
   const guideTo = points.length >= 3 ? points[0] : null;
+  const sortedAcc = [...accSamples].sort((a, b) => a - b);
+  const medianAcc = sortedAcc.length ? sortedAcc[Math.floor(sortedAcc.length / 2)] : null;
+  const totalSamples = acceptedCount + rejectedCount;
+  const acceptRate = totalSamples > 0 ? Math.round((acceptedCount / totalSamples) * 100) : 0;
+  const qaReady = acceptedCount >= 30 && bestAcc <= 15 && (medianAcc ?? 99) <= 20;
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] lg:h-screen">
@@ -207,6 +222,7 @@ function MeasurePage() {
         </span>
         <span className="text-muted-foreground">Profil: <b className="text-foreground">{estimateDeviceTier(bestAcc)}</b></span>
         <span className="text-muted-foreground">Best: <b className="text-foreground">±{bestAcc < 999 ? bestAcc.toFixed(1) : "—"} m</b></span>
+        <span className="text-muted-foreground">Méd: <b className="text-foreground">±{medianAcc != null ? medianAcc.toFixed(1) : "—"} m</b></span>
         <span className="text-muted-foreground">Distance: <b className="text-foreground">{formatDistance(totalDistance)}</b></span>
         <button onClick={() => setSatellite((s) => !s)} className="ml-auto px-3 py-1 rounded-md border text-xs">
           {satellite ? "Vue carte" : "Vue satellite"}
@@ -272,6 +288,31 @@ function MeasurePage() {
           </div>
         )}
 
+        {/* Contrôle qualité GPS — live */}
+        {running && (
+          <div className={`rounded-lg border p-2.5 text-[11px] ${qaReady ? "bg-success/5 border-success/30" : "bg-warn/5 border-warn/30"}`}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-semibold text-xs">
+                {qaReady ? "✓ Qualité GPS validée" : "◌ Contrôle qualité en cours"}
+              </span>
+              <span className="text-muted-foreground">
+                {acceptedCount} acceptés / {rejectedCount} rejetés ({acceptRate}%)
+              </span>
+            </div>
+            <div className="flex items-end gap-0.5 h-8">
+              {qaHistory.slice(-30).map((q, i) => {
+                const h = Math.max(8, Math.min(32, 32 - q.acc * 0.8));
+                const cls = !q.ok ? "bg-destructive" : q.acc <= 5 ? "bg-success" : q.acc <= 10 ? "bg-warn" : "bg-orange-500";
+                return <div key={i} className={`flex-1 rounded-sm ${cls}`} style={{ height: `${h}px` }} title={`±${q.acc.toFixed(1)}m ${q.ok ? "ok" : "rejeté"}`} />;
+              })}
+              {qaHistory.length === 0 && <span className="text-muted-foreground text-[10px]">En attente du signal…</span>}
+            </div>
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              Seuil acceptation ≤{DEFAULT_GPS_CONFIG.maxAcceptableAccuracy} m · médiane ±{medianAcc != null ? medianAcc.toFixed(1) : "—"} m · meilleure ±{bestAcc < 999 ? bestAcc.toFixed(1) : "—"} m
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <button onClick={markPoint} disabled={!running || !!capturing || paused}
             className="flex-1 h-12 rounded-lg bg-accent text-accent-foreground font-semibold disabled:opacity-50">
@@ -308,13 +349,18 @@ function MeasurePage() {
             className="flex-1 h-11 rounded-lg border font-medium disabled:opacity-40">
             Sauver brouillon
           </button>
-          <button onClick={() => save(true)} disabled={points.length < 3}
+          <button
+            onClick={() => {
+              if (!qaReady && !confirm("Qualité GPS encore faible (peu d'échantillons ou précision insuffisante). Soumettre quand même ?")) return;
+              save(true);
+            }}
+            disabled={points.length < 3}
             className="flex-1 h-11 rounded-lg bg-primary text-primary-foreground font-semibold disabled:opacity-50">
             Soumettre validation
           </button>
         </div>
         <p className="text-[10px] text-center text-muted-foreground">
-          Précision actuelle : ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"} m. Bornage définitif par géomètre.
+          Précision filtrée : ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"} m · médiane ±{medianAcc != null ? medianAcc.toFixed(1) : "—"} m · meilleure ±{bestAcc < 999 ? bestAcc.toFixed(1) : "—"} m. Bornage définitif par géomètre.
         </p>
       </div>
     </div>

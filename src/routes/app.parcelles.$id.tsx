@@ -51,13 +51,15 @@ function ParcDetail() {
     ? refOfficielle({ spCode: sp.code, domCode: dom.code, parcCode: parc.code })
     : "—";
 
-  const displayLots = showMorc && morcResult ? morcResult.lots : lots.map((l) => ({ code: l.code, polygon: l.polygon }));
+  const displayLots = showMorc && morcResult
+    ? morcResult.lots
+    : lots.map((l) => ({ code: l.code, polygon: l.polygon, areaM2: l.areaM2 }));
 
   async function saveMorc() {
-    if (!morcResult || !parc) return alert("Liez d'abord cette mesure à une parcelle.");
+    if (!morcResult || morcResult.lots.length === 0) return;
     const items: Lot[] = morcResult.lots.map((l) => ({
       id: crypto.randomUUID(),
-      parcelleId: parc.id,
+      parcelleId: parc?.id ?? m!.id,
       measurementId: m!.id,
       code: l.code,
       polygon: l.polygon,
@@ -66,6 +68,17 @@ function ParcDetail() {
     await db().lots.where("measurementId").equals(m!.id).delete();
     await db().lots.bulkPut(items);
     setShowMorc(false);
+  }
+
+  async function deleteLots() {
+    if (!confirm(`Supprimer les ${lots.length} lots créés ?`)) return;
+    await db().lots.where("measurementId").equals(m!.id).delete();
+  }
+
+  async function assignLot(lotId: string) {
+    const name = prompt("Nom du souscripteur pour ce lot :");
+    if (!name) return;
+    await db().lots.update(lotId, { assigneeName: name, assignedAt: Date.now() });
   }
 
   async function validate() {
@@ -189,13 +202,47 @@ function ParcDetail() {
             {showMorc && morcResult && (
               <>
                 <div className="text-xs text-muted-foreground">
-                  {morcResult.lots.length} lots — {formatArea(morcResult.totalAreaM2)} total
+                  Aperçu : {morcResult.lots.length} lots — {formatArea(morcResult.totalAreaM2)} total
                 </div>
-                <button onClick={saveMorc}
-                  className="w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-semibold">
-                  Valider et créer les lots
+                <button onClick={saveMorc} disabled={morcResult.lots.length === 0}
+                  className="w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">
+                  Valider et créer les {morcResult.lots.length} lots
                 </button>
               </>
+            )}
+
+            {lots.length > 0 && (
+              <div className="border rounded-lg overflow-hidden">
+                <div className="bg-muted px-2 py-1.5 text-[11px] font-semibold flex items-center justify-between">
+                  <span>{lots.length} lots créés</span>
+                  <button onClick={deleteLots} className="text-destructive text-[10px] hover:underline">Tout supprimer</button>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  <table className="w-full text-[11px]">
+                    <thead className="bg-muted/50 sticky top-0">
+                      <tr>
+                        <th className="text-left p-1.5">Code</th>
+                        <th className="text-right p-1.5">Surface</th>
+                        <th className="text-left p-1.5">Souscripteur</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lots.map((l) => (
+                        <tr key={l.id} className="border-t">
+                          <td className="p-1.5 font-mono">{l.code}</td>
+                          <td className="p-1.5 text-right">{formatArea(l.areaM2)}</td>
+                          <td className="p-1.5">
+                            <button onClick={() => assignLot(l.id)}
+                              className="text-left text-primary hover:underline truncate max-w-[120px]">
+                              {l.assigneeName ?? "+ assigner"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </div>
 

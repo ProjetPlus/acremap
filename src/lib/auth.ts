@@ -30,7 +30,7 @@ export const useAuth = create<AuthState>()(
       },
       signOut: () => set({ user: null }),
     }),
-    { name: "acremap-auth", onRehydrateStorage: () => (state) => { state?.setState?.({ hydrated: true } as never); } }
+    { name: "acremap-auth", onRehydrateStorage: () => () => setTimeout(() => useAuth.setState({ hydrated: true }), 0) }
   )
 );
 

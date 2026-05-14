@@ -123,8 +123,11 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     ["Surface mesurée", `${formatArea(area, "ha")}  (${area.toFixed(0)} m²)`],
     ["Périmètre", `${perim.toFixed(1)} m`],
     ["Nombre de points", String(m.points.length)],
-    ["Précision GPS médiane", m.deviceProfile ? `± ${m.deviceProfile.medianAccuracyM.toFixed(1)} m` : "—"],
-    ["Meilleure précision observée", m.deviceProfile ? `± ${m.deviceProfile.bestAccuracyM.toFixed(1)} m` : "—"],
+    ["QA points acceptés/rejetés", qa ? `${qa.acceptedCount} acceptés / ${qa.rejectedCount} rejetés` : "—"],
+    ["Précision GPS médiane", qa ? `± ${qa.medianAccuracyM.toFixed(1)} m` : "—"],
+    ["Meilleure précision observée", qa ? `± ${qa.bestAccuracyM.toFixed(1)} m` : "—"],
+    ["Dernière précision live", qa?.liveAccuracyM != null ? `± ${qa.liveAccuracyM.toFixed(1)} m` : "—"],
+    ["Seuil d'acceptation GPS", qa ? `≤ ${qa.maxAcceptableAccuracyM.toFixed(0)} m` : "—"],
     ["Profil GPS estimé", m.deviceProfile?.estimatedTier ?? "—"],
     ["Statut", m.status],
   ];

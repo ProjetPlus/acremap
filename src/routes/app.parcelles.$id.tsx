@@ -9,14 +9,71 @@ import { morceler } from "@/lib/morcellement";
 import { refOfficielle } from "@/lib/ref";
 import { downloadBlob, toCSV, toGeoJSON, toKML } from "@/lib/export";
 import { buildGeometrePdf } from "@/lib/pdf";
-import { haversine } from "@/lib/gps";
-import type { Lot } from "@/lib/types";
+import { DEFAULT_GPS_CONFIG, haversine, polygonAreaM2, polygonPerimeterM } from "@/lib/gps";
+import type { DeviceProfile, Domaine, GpsPoint, Lot, MeasurementPoint, MeasurementQA, Parcelle, SP } from "@/lib/types";
 import { StatusBadge } from "./app.index";
 
 export const Route = createFileRoute("/app/parcelles/$id")({
   component: ParcDetail,
   head: () => ({ meta: [{ title: "Détail mesure — AcreMap" }] }),
 });
+
+function normalizeQa(
+  qa: MeasurementQA | undefined,
+  profile: DeviceProfile | undefined,
+  trace: GpsPoint[],
+  points: MeasurementPoint[]
+): MeasurementQA | null {
+  if (qa) return qa;
+  const accuracies = [...trace, ...points].map((p) => p.accuracy).filter((a) => Number.isFinite(a) && a < 999).sort((a, b) => a - b);
+  if (accuracies.length === 0 && !profile) return null;
+  const best = profile?.bestAccuracyM ?? accuracies[0] ?? DEFAULT_GPS_CONFIG.maxAcceptableAccuracy;
+  const median = profile?.medianAccuracyM ?? accuracies[Math.floor(accuracies.length / 2)] ?? best;
+  return {
+    acceptedCount: profile?.samplesCount ?? accuracies.length,
+    rejectedCount: 0,
+    maxAcceptableAccuracyM: DEFAULT_GPS_CONFIG.maxAcceptableAccuracy,
+    bestAccuracyM: best,
+    medianAccuracyM: median,
+    liveAccuracyM: points.at(-1)?.accuracy ?? trace.at(-1)?.accuracy,
+    history: [...trace.slice(-24), ...points.slice(-16)].slice(-40).map((p) => ({
+      ts: p.ts,
+      accuracyM: p.accuracy,
+      accepted: p.accuracy <= DEFAULT_GPS_CONFIG.maxAcceptableAccuracy,
+    })),
+  };
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="p-8 max-w-md mx-auto text-center space-y-3">
+      <h1 className="text-xl font-bold text-destructive">Impossible d'afficher la consultation</h1>
+      <p className="text-sm text-muted-foreground">{message}</p>
+      <Link to="/app/parcelles" className="inline-flex items-center justify-center h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold">
+        Retour aux parcelles
+      </Link>
+    </div>
+  );
+}
+
+function EmptyParcelleState({ parc, dom, sp }: { parc?: Parcelle | null; dom?: Domaine | null; sp?: SP | null }) {
+  const title = parc ? `${parc.code} — ${parc.ownerName}` : "Mesure introuvable";
+  return (
+    <div className="p-8 max-w-md mx-auto text-center space-y-3">
+      <h1 className="text-xl font-bold">{title}</h1>
+      {sp && <p className="text-xs text-muted-foreground">{sp.district} › {sp.region} › {sp.departement} › {sp.name}{dom ? ` › ${dom.name}` : ""}</p>}
+      <p className="text-sm text-muted-foreground">Aucun levé terminé n'est encore associé à cette parcelle.</p>
+      <div className="flex gap-2 justify-center">
+        <Link to="/app/parcelles" className="h-10 px-4 inline-flex items-center rounded-md border text-sm font-medium">Retour</Link>
+        {parc && (
+          <Link to="/app/measure" search={{ parcelleId: parc.id }} className="h-10 px-4 inline-flex items-center rounded-md bg-primary text-primary-foreground text-sm font-semibold">
+            Démarrer le levé
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ParcDetail() {
   const { id } = Route.useParams();
@@ -27,15 +84,28 @@ function ParcDetail() {
   const [lotHa, setLotHa] = useState(1);
 
   const data = useLiveQuery(async () => {
-    if (!isBrowser()) return null;
-    const d = db();
-    const m = await d.measurements.get(id);
-    if (!m) return null;
-    const parc = m.parcelleId ? await d.parcelles.get(m.parcelleId) : null;
-    const dom = parc ? await d.domaines.get(parc.domaineId) : null;
-    const sp = dom ? await d.sps.get(dom.spId) : null;
-    const lots = await d.lots.where("measurementId").equals(id).toArray();
-    return { m, parc, dom, sp, lots };
+    if (!isBrowser()) return undefined;
+    try {
+      const d = db();
+      let m = await d.measurements.get(id);
+      let parc = m?.parcelleId ? await d.parcelles.get(m.parcelleId) : null;
+      if (!m) {
+        parc = await d.parcelles.get(id) ?? null;
+        const linked = parc ? await d.measurements.where("parcelleId").equals(parc.id).toArray() : [];
+        m = linked.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+      }
+      if (!m) {
+        const dom = parc ? await d.domaines.get(parc.domaineId) : null;
+        const sp = dom ? await d.sps.get(dom.spId) : null;
+        return { m: null, parc, dom, sp, lots: [], error: null };
+      }
+      const dom = parc ? await d.domaines.get(parc.domaineId) : null;
+      const sp = dom ? await d.sps.get(dom.spId) : null;
+      const lots = await d.lots.where("measurementId").equals(m.id).toArray();
+      return { m, parc, dom, sp, lots, error: null };
+    } catch (e: any) {
+      return { m: null, parc: null, dom: null, sp: null, lots: [], error: e?.message ?? "Impossible d'afficher cette mesure." };
+    }
   }, [id]);
 
   const morcResult = useMemo(() => {
@@ -43,9 +113,14 @@ function ParcDetail() {
     return morceler(data.m.points, lotHa);
   }, [data?.m, lotHa]);
 
-  if (!data) return <div className="p-8 text-center text-muted-foreground">Chargement…</div>;
+  if (data === undefined) return <div className="p-8 text-center text-muted-foreground">Chargement…</div>;
   const { m, parc, dom, sp, lots } = data;
-  if (!m) return <div className="p-8 text-center">Mesure introuvable. <Link to="/app/parcelles" className="underline">Retour</Link></div>;
+  if (data.error) return <ErrorState message={data.error} />;
+  if (!m) return <EmptyParcelleState parc={parc} dom={dom} sp={sp} />;
+
+  const measuredAreaM2 = polygonAreaM2(m.points);
+  const measuredPerimeterM = polygonPerimeterM(m.points);
+  const qa = normalizeQa(m.qa, m.deviceProfile, m.trace, m.points);
 
   const reference = parc && dom && sp
     ? refOfficielle({ spCode: sp.code, domCode: dom.code, parcCode: parc.code })
@@ -166,19 +241,44 @@ function ParcDetail() {
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <Stat label="Surface" value={formatArea(m.areaM2, m.unit)} />
-            <Stat label="Périmètre" value={`${m.perimeterM.toFixed(0)} m`} />
+            <Stat label="Surface" value={formatArea(measuredAreaM2, m.unit)} />
+            <Stat label="Périmètre" value={`${measuredPerimeterM.toFixed(0)} m`} />
             <Stat label="Points" value={String(m.points.length)} />
             <Stat label="Lots créés" value={String(lots.length)} />
           </div>
 
-          {m.deviceProfile && (
-            <div className="text-xs bg-accent/5 border border-accent/20 rounded-lg p-3 space-y-1">
-              <div className="font-semibold text-accent">Profil GPS de l'appareil</div>
-              <div>Type: <b>{m.deviceProfile.estimatedTier}</b></div>
-              <div>Meilleure précision: <b>±{m.deviceProfile.bestAccuracyM.toFixed(1)} m</b></div>
-              <div>Précision médiane: <b>±{m.deviceProfile.medianAccuracyM.toFixed(1)} m</b></div>
-              <div>Échantillons enregistrés: <b>{m.deviceProfile.samplesCount}</b></div>
+          {qa && (
+            <div className="text-xs bg-accent/5 border border-accent/20 rounded-lg p-3 space-y-2">
+              <div className="font-semibold text-accent">Contrôle qualité GPS</div>
+              <div className="grid grid-cols-2 gap-2">
+                <span>Live: <b>±{qa.liveAccuracyM != null ? qa.liveAccuracyM.toFixed(1) : "—"} m</b></span>
+                <span>Seuil: <b>≤{qa.maxAcceptableAccuracyM.toFixed(0)} m</b></span>
+                <span>Meilleure: <b>±{qa.bestAccuracyM.toFixed(1)} m</b></span>
+                <span>Médiane: <b>±{qa.medianAccuracyM.toFixed(1)} m</b></span>
+                <span>Acceptés: <b>{qa.acceptedCount}</b></span>
+                <span>Rejetés: <b>{qa.rejectedCount}</b></span>
+              </div>
+              <div className="flex items-end gap-0.5 h-8 pt-1" aria-label="Historique qualité GPS">
+                {qa.history.slice(-40).map((q, i) => {
+                  const h = Math.max(8, Math.min(32, 32 - q.accuracyM * 0.8));
+                  const cls = !q.accepted ? "bg-destructive" : q.accuracyM <= 5 ? "bg-success" : q.accuracyM <= 10 ? "bg-warn" : "bg-accent";
+                  return <div key={`${q.ts}-${i}`} className={`flex-1 rounded-sm ${cls}`} style={{ height: `${h}px` }} title={`±${q.accuracyM.toFixed(1)} m · ${q.accepted ? "accepté" : "rejeté"}`} />;
+                })}
+              </div>
+              <div className="max-h-28 overflow-y-auto border rounded-md bg-background/60">
+                <table className="w-full text-[10px]">
+                  <thead className="sticky top-0 bg-muted"><tr><th className="text-left p-1">Heure</th><th className="text-right p-1">Précision</th><th className="text-left p-1">Décision</th></tr></thead>
+                  <tbody>
+                    {qa.history.slice(-12).reverse().map((q, i) => (
+                      <tr key={`${q.ts}-row-${i}`} className="border-t">
+                        <td className="p-1">{new Date(q.ts).toLocaleTimeString("fr-FR")}</td>
+                        <td className="p-1 text-right font-mono">±{q.accuracyM.toFixed(1)} m</td>
+                        <td className={q.accepted ? "p-1 text-success" : "p-1 text-destructive"}>{q.accepted ? "accepté" : "rejeté"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

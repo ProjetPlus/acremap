@@ -5,6 +5,7 @@ import type { Role, User } from "./types";
 
 interface AuthState {
   user: User | null;
+  hydrated: boolean;
   signIn: (username: string, password: string) => Promise<User>;
   signOut: () => void;
 }
@@ -18,6 +19,7 @@ export const useAuth = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
+      hydrated: false,
       signIn: async (username, password) => {
         await new Promise((r) => setTimeout(r, 250));
         const u = SEED.find((x) => x.username === username && x.password === password);
@@ -28,7 +30,7 @@ export const useAuth = create<AuthState>()(
       },
       signOut: () => set({ user: null }),
     }),
-    { name: "acremap-auth" }
+    { name: "acremap-auth", onRehydrateStorage: () => () => setTimeout(() => useAuth.setState({ hydrated: true }), 0) }
   )
 );
 

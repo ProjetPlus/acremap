@@ -174,7 +174,16 @@ function MeasurePage() {
         estimatedTier: estimateDeviceTier(bestAcc),
         bestAccuracyM: bestAcc,
         medianAccuracyM: median,
-        samplesCount: trace.length,
+        samplesCount: acceptedCount + rejectedCount,
+      },
+      qa: {
+        acceptedCount,
+        rejectedCount,
+        maxAcceptableAccuracyM: DEFAULT_GPS_CONFIG.maxAcceptableAccuracy,
+        bestAccuracyM: bestAcc,
+        medianAccuracyM: median,
+        liveAccuracyM: filteredCur?.accuracy,
+        history: qaHistory.map((q) => ({ ts: q.ts, accuracyM: q.acc, accepted: q.ok })),
       },
     };
     await db().measurements.put(m);

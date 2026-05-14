@@ -175,19 +175,44 @@ function ParcDetail() {
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <Stat label="Surface" value={formatArea(m.areaM2, m.unit)} />
-            <Stat label="Périmètre" value={`${m.perimeterM.toFixed(0)} m`} />
+            <Stat label="Surface" value={formatArea(measuredAreaM2, m.unit)} />
+            <Stat label="Périmètre" value={`${measuredPerimeterM.toFixed(0)} m`} />
             <Stat label="Points" value={String(m.points.length)} />
             <Stat label="Lots créés" value={String(lots.length)} />
           </div>
 
-          {m.deviceProfile && (
-            <div className="text-xs bg-accent/5 border border-accent/20 rounded-lg p-3 space-y-1">
-              <div className="font-semibold text-accent">Profil GPS de l'appareil</div>
-              <div>Type: <b>{m.deviceProfile.estimatedTier}</b></div>
-              <div>Meilleure précision: <b>±{m.deviceProfile.bestAccuracyM.toFixed(1)} m</b></div>
-              <div>Précision médiane: <b>±{m.deviceProfile.medianAccuracyM.toFixed(1)} m</b></div>
-              <div>Échantillons enregistrés: <b>{m.deviceProfile.samplesCount}</b></div>
+          {qa && (
+            <div className="text-xs bg-accent/5 border border-accent/20 rounded-lg p-3 space-y-2">
+              <div className="font-semibold text-accent">Contrôle qualité GPS</div>
+              <div className="grid grid-cols-2 gap-2">
+                <span>Live: <b>±{qa.liveAccuracyM != null ? qa.liveAccuracyM.toFixed(1) : "—"} m</b></span>
+                <span>Seuil: <b>≤{qa.maxAcceptableAccuracyM.toFixed(0)} m</b></span>
+                <span>Meilleure: <b>±{qa.bestAccuracyM.toFixed(1)} m</b></span>
+                <span>Médiane: <b>±{qa.medianAccuracyM.toFixed(1)} m</b></span>
+                <span>Acceptés: <b>{qa.acceptedCount}</b></span>
+                <span>Rejetés: <b>{qa.rejectedCount}</b></span>
+              </div>
+              <div className="flex items-end gap-0.5 h-8 pt-1" aria-label="Historique qualité GPS">
+                {qa.history.slice(-40).map((q, i) => {
+                  const h = Math.max(8, Math.min(32, 32 - q.accuracyM * 0.8));
+                  const cls = !q.accepted ? "bg-destructive" : q.accuracyM <= 5 ? "bg-success" : q.accuracyM <= 10 ? "bg-warn" : "bg-accent";
+                  return <div key={`${q.ts}-${i}`} className={`flex-1 rounded-sm ${cls}`} style={{ height: `${h}px` }} title={`±${q.accuracyM.toFixed(1)} m · ${q.accepted ? "accepté" : "rejeté"}`} />;
+                })}
+              </div>
+              <div className="max-h-28 overflow-y-auto border rounded-md bg-background/60">
+                <table className="w-full text-[10px]">
+                  <thead className="sticky top-0 bg-muted"><tr><th className="text-left p-1">Heure</th><th className="text-right p-1">Précision</th><th className="text-left p-1">Décision</th></tr></thead>
+                  <tbody>
+                    {qa.history.slice(-12).reverse().map((q, i) => (
+                      <tr key={`${q.ts}-row-${i}`} className="border-t">
+                        <td className="p-1">{new Date(q.ts).toLocaleTimeString("fr-FR")}</td>
+                        <td className="p-1 text-right font-mono">±{q.accuracyM.toFixed(1)} m</td>
+                        <td className={q.accepted ? "p-1 text-success" : "p-1 text-destructive"}>{q.accepted ? "accepté" : "rejeté"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

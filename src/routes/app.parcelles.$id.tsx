@@ -51,13 +51,15 @@ function ParcDetail() {
     ? refOfficielle({ spCode: sp.code, domCode: dom.code, parcCode: parc.code })
     : "—";
 
-  const displayLots = showMorc && morcResult ? morcResult.lots : lots.map((l) => ({ code: l.code, polygon: l.polygon }));
+  const displayLots = showMorc && morcResult
+    ? morcResult.lots
+    : lots.map((l) => ({ code: l.code, polygon: l.polygon, areaM2: l.areaM2 }));
 
   async function saveMorc() {
-    if (!morcResult || !parc) return alert("Liez d'abord cette mesure à une parcelle.");
+    if (!morcResult || morcResult.lots.length === 0) return;
     const items: Lot[] = morcResult.lots.map((l) => ({
       id: crypto.randomUUID(),
-      parcelleId: parc.id,
+      parcelleId: parc?.id ?? m!.id,
       measurementId: m!.id,
       code: l.code,
       polygon: l.polygon,
@@ -66,6 +68,17 @@ function ParcDetail() {
     await db().lots.where("measurementId").equals(m!.id).delete();
     await db().lots.bulkPut(items);
     setShowMorc(false);
+  }
+
+  async function deleteLots() {
+    if (!confirm(`Supprimer les ${lots.length} lots créés ?`)) return;
+    await db().lots.where("measurementId").equals(m!.id).delete();
+  }
+
+  async function assignLot(lotId: string) {
+    const name = prompt("Nom du souscripteur pour ce lot :");
+    if (!name) return;
+    await db().lots.update(lotId, { assigneeName: name, assignedAt: Date.now() });
   }
 
   async function validate() {

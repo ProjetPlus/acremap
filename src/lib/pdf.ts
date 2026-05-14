@@ -2,8 +2,8 @@
 // Module D du CDC V2 : rendu structuré pour le géomètre/expert.
 // Utilise jsPDF (pure JS) — fonctionne hors ligne.
 import { jsPDF } from "jspdf";
-import type { Domaine, Lot, Measurement, Parcelle, SP } from "./types";
-import { polygonAreaM2, polygonPerimeterM, haversine } from "./gps";
+import type { Domaine, Lot, Measurement, MeasurementQA, Parcelle, SP } from "./types";
+import { DEFAULT_GPS_CONFIG, polygonAreaM2, polygonPerimeterM, haversine } from "./gps";
 import { refOfficielle } from "./ref";
 import { formatArea } from "./format";
 
@@ -32,8 +32,26 @@ function cardinal(deg: number) {
   return dirs[Math.round(deg / 45) % 8];
 }
 
+function pdfQa(m: Measurement): MeasurementQA | null {
+  if (m.qa) return m.qa;
+  const vals = [...m.trace, ...m.points].map((p) => p.accuracy).filter((a) => Number.isFinite(a) && a < 999).sort((a, b) => a - b);
+  if (vals.length === 0 && !m.deviceProfile) return null;
+  const best = m.deviceProfile?.bestAccuracyM ?? vals[0] ?? DEFAULT_GPS_CONFIG.maxAcceptableAccuracy;
+  const median = m.deviceProfile?.medianAccuracyM ?? vals[Math.floor(vals.length / 2)] ?? best;
+  return {
+    acceptedCount: m.deviceProfile?.samplesCount ?? vals.length,
+    rejectedCount: 0,
+    maxAcceptableAccuracyM: DEFAULT_GPS_CONFIG.maxAcceptableAccuracy,
+    bestAccuracyM: best,
+    medianAccuracyM: median,
+    liveAccuracyM: m.points.at(-1)?.accuracy ?? m.trace.at(-1)?.accuracy,
+    history: [...m.trace.slice(-24), ...m.points.slice(-16)].slice(-40).map((p) => ({ ts: p.ts, accuracyM: p.accuracy, accepted: p.accuracy <= DEFAULT_GPS_CONFIG.maxAcceptableAccuracy })),
+  };
+}
+
 export function buildGeometrePdf(args: BuildArgs): Blob {
   const { measurement: m, parcelle, domaine, sp, lots = [], operatorName, organisation = "AgriCapital SARL" } = args;
+  const qa = pdfQa(m);
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();

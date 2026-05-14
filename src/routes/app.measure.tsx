@@ -189,6 +189,11 @@ function MeasurePage() {
   const accClass = filteredCur ? classifyAccuracy(filteredCur.accuracy) : "bad";
   const guideColor: "red" | "orange" = points.length === 3 ? "red" : "orange";
   const guideTo = points.length >= 3 ? points[0] : null;
+  const sortedAcc = [...accSamples].sort((a, b) => a - b);
+  const medianAcc = sortedAcc.length ? sortedAcc[Math.floor(sortedAcc.length / 2)] : null;
+  const totalSamples = acceptedCount + rejectedCount;
+  const acceptRate = totalSamples > 0 ? Math.round((acceptedCount / totalSamples) * 100) : 0;
+  const qaReady = acceptedCount >= 30 && bestAcc <= 15 && (medianAcc ?? 99) <= 20;
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] lg:h-screen">

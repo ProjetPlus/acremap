@@ -30,24 +30,31 @@ export const DEFAULT_GPS_CONFIG: GpsConfig = {
 // State: position (deg). Variance: in m² (converted via local meter scale)
 export class Kalman1D {
   private x: number | null = null;
-  private variance = -1; // m²
+  private variance = -1; // in deg²
   constructor(private processNoise: number) {}
   reset() { this.x = null; this.variance = -1; }
+  /** Returns filtered position (deg). Use varianceM2() for filtered accuracy in meters. */
   update(measurement: number, accuracyM: number, dtSec: number, mPerDeg: number): number {
     const measVar = Math.max(accuracyM * accuracyM, 1);
     if (this.x === null || this.variance < 0) {
       this.x = measurement;
       this.variance = measVar / (mPerDeg * mPerDeg);
+      this._lastMperDeg = mPerDeg;
       return this.x;
     }
-    // predict
     this.variance += (dtSec * this.processNoise) ** 2 / (mPerDeg * mPerDeg);
-    // update
     const measVarDeg = measVar / (mPerDeg * mPerDeg);
     const k = this.variance / (this.variance + measVarDeg);
     this.x = this.x + k * (measurement - this.x);
     this.variance = (1 - k) * this.variance;
+    this._lastMperDeg = mPerDeg;
     return this.x;
+  }
+  private _lastMperDeg = 111320;
+  /** filtered std deviation expressed in meters */
+  stdDevM(): number {
+    if (this.variance < 0) return 999;
+    return Math.sqrt(this.variance) * this._lastMperDeg;
   }
 }
 

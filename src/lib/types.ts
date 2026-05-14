@@ -68,6 +68,7 @@ export interface Measurement {
   perimeterM: number;
   unit: "ha" | "m2" | "km2";
   deviceProfile?: DeviceProfile;
+  qa?: MeasurementQA;
   notes?: string;
 }
 
@@ -89,4 +90,14 @@ export interface DeviceProfile {
   bestAccuracyM: number;
   medianAccuracyM: number;
   samplesCount: number;
+}
+
+export interface MeasurementQA {
+  acceptedCount: number;
+  rejectedCount: number;
+  maxAcceptableAccuracyM: number;
+  bestAccuracyM: number;
+  medianAccuracyM: number;
+  liveAccuracyM?: number;
+  history: { ts: number; accuracyM: number; accepted: boolean }[];
 }

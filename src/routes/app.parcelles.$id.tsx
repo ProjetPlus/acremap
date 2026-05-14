@@ -68,9 +68,18 @@ function ParcDetail() {
     if (!isBrowser()) return undefined;
     try {
       const d = db();
-      const m = await d.measurements.get(id);
-      if (!m) return { m: null, parc: null, dom: null, sp: null, lots: [], error: null };
-      const parc = m.parcelleId ? await d.parcelles.get(m.parcelleId) : null;
+      let m = await d.measurements.get(id);
+      let parc = m?.parcelleId ? await d.parcelles.get(m.parcelleId) : null;
+      if (!m) {
+        parc = await d.parcelles.get(id) ?? null;
+        const linked = parc ? await d.measurements.where("parcelleId").equals(parc.id).toArray() : [];
+        m = linked.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+      }
+      if (!m) {
+        const dom = parc ? await d.domaines.get(parc.domaineId) : null;
+        const sp = dom ? await d.sps.get(dom.spId) : null;
+        return { m: null, parc, dom, sp, lots: [], error: null };
+      }
       const dom = parc ? await d.domaines.get(parc.domaineId) : null;
       const sp = dom ? await d.sps.get(dom.spId) : null;
       const lots = await d.lots.where("measurementId").equals(id).toArray();
@@ -88,7 +97,7 @@ function ParcDetail() {
   if (data === undefined) return <div className="p-8 text-center text-muted-foreground">Chargement…</div>;
   const { m, parc, dom, sp, lots } = data;
   if (data.error) return <ErrorState message={data.error} />;
-  if (!m) return <div className="p-8 text-center">Mesure introuvable. <Link to="/app/parcelles" className="underline">Retour</Link></div>;
+  if (!m) return <EmptyParcelleState parc={parc} dom={dom} sp={sp} />;
 
   const measuredAreaM2 = polygonAreaM2(m.points);
   const measuredPerimeterM = polygonPerimeterM(m.points);

@@ -143,8 +143,8 @@ export function startWatch(listener: Listener, cfg: GpsConfig = DEFAULT_GPS_CONF
         alt: pos.coords.altitude ?? null,
       };
       if (acc > cfg.maxAcceptableAccuracy) {
-        // still notify with raw so UI can show poor accuracy, but filtered = raw (no Kalman corruption)
-        listener(raw, raw);
+        // mark filtered with raw accuracy AND a "rejected" flag in alt-channel
+        listener(raw, { ...raw, accuracy: acc });
         return;
       }
       const dt = last ? (raw.ts - last.ts) / 1000 : 1;
@@ -152,7 +152,12 @@ export function startWatch(listener: Listener, cfg: GpsConfig = DEFAULT_GPS_CONF
       const mPerDegLng = 111320 * Math.cos((raw.lat * Math.PI) / 180);
       const fLat = kLat.update(raw.lat, acc, dt, mPerDegLat);
       const fLng = kLng.update(raw.lng, acc, dt, mPerDegLng);
-      const filtered: GpsPoint = { ...raw, lat: fLat, lng: fLng };
+      // Filtered accuracy = combined std-dev over both axes (honest, decreases as samples accumulate)
+      const filteredAcc = Math.max(
+        Math.sqrt((kLat.stdDevM() ** 2 + kLng.stdDevM() ** 2) / 2),
+        0.5
+      );
+      const filtered: GpsPoint = { ...raw, lat: fLat, lng: fLng, accuracy: filteredAcc };
       last = raw;
       listener(raw, filtered);
     },

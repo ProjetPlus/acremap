@@ -222,6 +222,7 @@ function MeasurePage() {
         </span>
         <span className="text-muted-foreground">Profil: <b className="text-foreground">{estimateDeviceTier(bestAcc)}</b></span>
         <span className="text-muted-foreground">Best: <b className="text-foreground">±{bestAcc < 999 ? bestAcc.toFixed(1) : "—"} m</b></span>
+        <span className="text-muted-foreground">Méd: <b className="text-foreground">±{medianAcc != null ? medianAcc.toFixed(1) : "—"} m</b></span>
         <span className="text-muted-foreground">Distance: <b className="text-foreground">{formatDistance(totalDistance)}</b></span>
         <button onClick={() => setSatellite((s) => !s)} className="ml-auto px-3 py-1 rounded-md border text-xs">
           {satellite ? "Vue carte" : "Vue satellite"}

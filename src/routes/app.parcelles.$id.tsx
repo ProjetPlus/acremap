@@ -9,8 +9,8 @@ import { morceler } from "@/lib/morcellement";
 import { refOfficielle } from "@/lib/ref";
 import { downloadBlob, toCSV, toGeoJSON, toKML } from "@/lib/export";
 import { buildGeometrePdf } from "@/lib/pdf";
-import { haversine } from "@/lib/gps";
-import type { Lot } from "@/lib/types";
+import { DEFAULT_GPS_CONFIG, haversine, polygonAreaM2, polygonPerimeterM } from "@/lib/gps";
+import type { Lot, MeasurementQA } from "@/lib/types";
 import { StatusBadge } from "./app.index";
 
 export const Route = createFileRoute("/app/parcelles/$id")({
@@ -27,15 +27,19 @@ function ParcDetail() {
   const [lotHa, setLotHa] = useState(1);
 
   const data = useLiveQuery(async () => {
-    if (!isBrowser()) return null;
-    const d = db();
-    const m = await d.measurements.get(id);
-    if (!m) return null;
-    const parc = m.parcelleId ? await d.parcelles.get(m.parcelleId) : null;
-    const dom = parc ? await d.domaines.get(parc.domaineId) : null;
-    const sp = dom ? await d.sps.get(dom.spId) : null;
-    const lots = await d.lots.where("measurementId").equals(id).toArray();
-    return { m, parc, dom, sp, lots };
+    if (!isBrowser()) return undefined;
+    try {
+      const d = db();
+      const m = await d.measurements.get(id);
+      if (!m) return { m: null, parc: null, dom: null, sp: null, lots: [], error: null };
+      const parc = m.parcelleId ? await d.parcelles.get(m.parcelleId) : null;
+      const dom = parc ? await d.domaines.get(parc.domaineId) : null;
+      const sp = dom ? await d.sps.get(dom.spId) : null;
+      const lots = await d.lots.where("measurementId").equals(id).toArray();
+      return { m, parc, dom, sp, lots, error: null };
+    } catch (e: any) {
+      return { m: null, parc: null, dom: null, sp: null, lots: [], error: e?.message ?? "Impossible d'afficher cette mesure." };
+    }
   }, [id]);
 
   const morcResult = useMemo(() => {
@@ -43,9 +47,14 @@ function ParcDetail() {
     return morceler(data.m.points, lotHa);
   }, [data?.m, lotHa]);
 
-  if (!data) return <div className="p-8 text-center text-muted-foreground">Chargement…</div>;
+  if (data === undefined) return <div className="p-8 text-center text-muted-foreground">Chargement…</div>;
   const { m, parc, dom, sp, lots } = data;
+  if (data.error) return <ErrorState message={data.error} />;
   if (!m) return <div className="p-8 text-center">Mesure introuvable. <Link to="/app/parcelles" className="underline">Retour</Link></div>;
+
+  const measuredAreaM2 = polygonAreaM2(m.points);
+  const measuredPerimeterM = polygonPerimeterM(m.points);
+  const qa = normalizeQa(m.qa, m.deviceProfile, m.trace, m.points);
 
   const reference = parc && dom && sp
     ? refOfficielle({ spCode: sp.code, domCode: dom.code, parcCode: parc.code })

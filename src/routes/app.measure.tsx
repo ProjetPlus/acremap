@@ -349,13 +349,18 @@ function MeasurePage() {
             className="flex-1 h-11 rounded-lg border font-medium disabled:opacity-40">
             Sauver brouillon
           </button>
-          <button onClick={() => save(true)} disabled={points.length < 3}
+          <button
+            onClick={() => {
+              if (!qaReady && !confirm("Qualité GPS encore faible (peu d'échantillons ou précision insuffisante). Soumettre quand même ?")) return;
+              save(true);
+            }}
+            disabled={points.length < 3}
             className="flex-1 h-11 rounded-lg bg-primary text-primary-foreground font-semibold disabled:opacity-50">
             Soumettre validation
           </button>
         </div>
         <p className="text-[10px] text-center text-muted-foreground">
-          Précision actuelle : ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"} m. Bornage définitif par géomètre.
+          Précision filtrée : ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"} m · médiane ±{medianAcc != null ? medianAcc.toFixed(1) : "—"} m · meilleure ±{bestAcc < 999 ? bestAcc.toFixed(1) : "—"} m. Bornage définitif par géomètre.
         </p>
       </div>
     </div>

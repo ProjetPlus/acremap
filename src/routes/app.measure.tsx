@@ -42,6 +42,9 @@ function MeasurePage() {
   const [distanceFromLast, setDistanceFromLast] = useState(0);
   const [bestAcc, setBestAcc] = useState<number>(999);
   const [accSamples, setAccSamples] = useState<number[]>([]);
+  const [rejectedCount, setRejectedCount] = useState(0);
+  const [acceptedCount, setAcceptedCount] = useState(0);
+  const [qaHistory, setQaHistory] = useState<{ ts: number; acc: number; ok: boolean }[]>([]);
   const [capturing, setCapturing] = useState<{ n: number; target: number; acc: number } | null>(null);
   const [autoMark100, setAutoMark100] = useState(true);
   const [error, setError] = useState<string | null>(null);

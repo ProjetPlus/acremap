@@ -101,7 +101,7 @@ function ParcDetail() {
       }
       const dom = parc ? await d.domaines.get(parc.domaineId) : null;
       const sp = dom ? await d.sps.get(dom.spId) : null;
-      const lots = await d.lots.where("measurementId").equals(id).toArray();
+      const lots = await d.lots.where("measurementId").equals(m.id).toArray();
       return { m, parc, dom, sp, lots, error: null };
     } catch (e: any) {
       return { m: null, parc: null, dom: null, sp: null, lots: [], error: e?.message ?? "Impossible d'afficher cette mesure." };

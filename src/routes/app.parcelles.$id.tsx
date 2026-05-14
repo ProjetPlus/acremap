@@ -10,7 +10,7 @@ import { refOfficielle } from "@/lib/ref";
 import { downloadBlob, toCSV, toGeoJSON, toKML } from "@/lib/export";
 import { buildGeometrePdf } from "@/lib/pdf";
 import { DEFAULT_GPS_CONFIG, haversine, polygonAreaM2, polygonPerimeterM } from "@/lib/gps";
-import type { DeviceProfile, GpsPoint, Lot, MeasurementPoint, MeasurementQA } from "@/lib/types";
+import type { DeviceProfile, Domaine, GpsPoint, Lot, MeasurementPoint, MeasurementQA, Parcelle, SP } from "@/lib/types";
 import { StatusBadge } from "./app.index";
 
 export const Route = createFileRoute("/app/parcelles/$id")({
@@ -52,6 +52,25 @@ function ErrorState({ message }: { message: string }) {
       <Link to="/app/parcelles" className="inline-flex items-center justify-center h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold">
         Retour aux parcelles
       </Link>
+    </div>
+  );
+}
+
+function EmptyParcelleState({ parc, dom, sp }: { parc?: Parcelle | null; dom?: Domaine | null; sp?: SP | null }) {
+  const title = parc ? `${parc.code} — ${parc.ownerName}` : "Mesure introuvable";
+  return (
+    <div className="p-8 max-w-md mx-auto text-center space-y-3">
+      <h1 className="text-xl font-bold">{title}</h1>
+      {sp && <p className="text-xs text-muted-foreground">{sp.district} › {sp.region} › {sp.departement} › {sp.name}{dom ? ` › ${dom.name}` : ""}</p>}
+      <p className="text-sm text-muted-foreground">Aucun levé terminé n'est encore associé à cette parcelle.</p>
+      <div className="flex gap-2 justify-center">
+        <Link to="/app/parcelles" className="h-10 px-4 inline-flex items-center rounded-md border text-sm font-medium">Retour</Link>
+        {parc && (
+          <Link to="/app/measure" search={{ parcelleId: parc.id }} className="h-10 px-4 inline-flex items-center rounded-md bg-primary text-primary-foreground text-sm font-semibold">
+            Démarrer le levé
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

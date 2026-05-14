@@ -31,6 +31,16 @@ class AcreDB extends Dexie {
       lots: "id, parcelleId, code",
       meta: "key",
     });
+    // v3 — index measurementId so consultation/morcellement can load lots without Dexie errors
+    this.version(3).stores({
+      users: "id, username, role",
+      sps: "id, code, district, region, departement",
+      domaines: "id, code, spId",
+      parcelles: "id, code, domaineId, ownerName",
+      measurements: "id, status, parcelleId, createdBy, createdAt",
+      lots: "id, parcelleId, measurementId, code",
+      meta: "key",
+    });
   }
 }
 

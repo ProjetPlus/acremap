@@ -10,13 +10,51 @@ import { refOfficielle } from "@/lib/ref";
 import { downloadBlob, toCSV, toGeoJSON, toKML } from "@/lib/export";
 import { buildGeometrePdf } from "@/lib/pdf";
 import { DEFAULT_GPS_CONFIG, haversine, polygonAreaM2, polygonPerimeterM } from "@/lib/gps";
-import type { Lot, MeasurementQA } from "@/lib/types";
+import type { DeviceProfile, GpsPoint, Lot, MeasurementPoint, MeasurementQA } from "@/lib/types";
 import { StatusBadge } from "./app.index";
 
 export const Route = createFileRoute("/app/parcelles/$id")({
   component: ParcDetail,
   head: () => ({ meta: [{ title: "Détail mesure — AcreMap" }] }),
 });
+
+function normalizeQa(
+  qa: MeasurementQA | undefined,
+  profile: DeviceProfile | undefined,
+  trace: GpsPoint[],
+  points: MeasurementPoint[]
+): MeasurementQA | null {
+  if (qa) return qa;
+  const accuracies = [...trace, ...points].map((p) => p.accuracy).filter((a) => Number.isFinite(a) && a < 999).sort((a, b) => a - b);
+  if (accuracies.length === 0 && !profile) return null;
+  const best = profile?.bestAccuracyM ?? accuracies[0] ?? DEFAULT_GPS_CONFIG.maxAcceptableAccuracy;
+  const median = profile?.medianAccuracyM ?? accuracies[Math.floor(accuracies.length / 2)] ?? best;
+  return {
+    acceptedCount: profile?.samplesCount ?? accuracies.length,
+    rejectedCount: 0,
+    maxAcceptableAccuracyM: DEFAULT_GPS_CONFIG.maxAcceptableAccuracy,
+    bestAccuracyM: best,
+    medianAccuracyM: median,
+    liveAccuracyM: points.at(-1)?.accuracy ?? trace.at(-1)?.accuracy,
+    history: [...trace.slice(-24), ...points.slice(-16)].slice(-40).map((p) => ({
+      ts: p.ts,
+      accuracyM: p.accuracy,
+      accepted: p.accuracy <= DEFAULT_GPS_CONFIG.maxAcceptableAccuracy,
+    })),
+  };
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="p-8 max-w-md mx-auto text-center space-y-3">
+      <h1 className="text-xl font-bold text-destructive">Impossible d'afficher la consultation</h1>
+      <p className="text-sm text-muted-foreground">{message}</p>
+      <Link to="/app/parcelles" className="inline-flex items-center justify-center h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold">
+        Retour aux parcelles
+      </Link>
+    </div>
+  );
+}
 
 function ParcDetail() {
   const { id } = Route.useParams();

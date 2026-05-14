@@ -19,12 +19,13 @@ const NAV: { to: string; label: string; short: string; icon: string; admin?: boo
 
 function AppLayout() {
   const user = useAuth((s) => s.user);
+  const hydrated = useAuth((s) => s.hydrated);
   const signOut = useAuth((s) => s.signOut);
   const nav = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [notifPerm, setNotifPerm] = useState<string>("default");
 
-  useEffect(() => { if (!user) nav({ to: "/login" }); }, [user, nav]);
+  useEffect(() => { if (hydrated && !user) nav({ to: "/login" }); }, [hydrated, user, nav]);
 
   // Service Worker — désactivé dans les iframes / previews Lovable
   useEffect(() => {
@@ -45,7 +46,7 @@ function AppLayout() {
 
   useEffect(() => { setNotifPerm(notificationPermission()); }, []);
 
-  if (!user) return null;
+  if (!hydrated || !user) return null;
   const items = NAV.filter((n) => !n.admin || user.role === "admin");
 
   return (

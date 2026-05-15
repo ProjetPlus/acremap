@@ -12,6 +12,10 @@ import { useAuth } from "@/lib/auth";
 import { formatArea, formatDistance } from "@/lib/format";
 import { feedbackError, feedbackMark, feedbackSuccess, unlockAudio, notify, requestNotificationPermission } from "@/lib/feedback";
 import type { GpsPoint, Measurement, MeasurementPoint } from "@/lib/types";
+import {
+  MapPin, Pause, Play, Undo2, Save, Send, Settings2, Layers, X,
+  ChevronDown, ChevronUp, Crosshair, AlertTriangle, Activity,
+} from "lucide-react";
 
 const searchSchema = z.object({ parcelleId: z.string().optional() });
 
@@ -48,20 +52,18 @@ function MeasurePage() {
   const [capturing, setCapturing] = useState<{ n: number; target: number; acc: number } | null>(null);
   const [autoMark100, setAutoMark100] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [pausedMs, setPausedMs] = useState(0);
+  const [statsOpen, setStatsOpen] = useState(true);
+  const [qaOpen, setQaOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const lastAutoRef = useRef<GpsPoint | null>(null);
   const watchRef = useRef<{ stop: () => void } | null>(null);
   const pausedRef = useRef(false);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
 
-  // Démarre le GPS
   useEffect(() => {
     if (!running) return;
     setError(null);
     const handle = startWatch((raw, filtered) => {
-      // En pause : on continue à afficher la position courante (pour montrer que GPS est vivant),
-      // mais on n'enregistre rien dans la trace ni dans les points auto-marqués.
       setCurrent(raw);
       setFilteredCur(filtered);
       const accepted = raw.accuracy <= DEFAULT_GPS_CONFIG.maxAcceptableAccuracy;
@@ -107,22 +109,12 @@ function MeasurePage() {
     await unlockAudio();
     await requestNotificationPermission();
     setRunning(true);
-    setStartedAt(Date.now());
   }
   function togglePause() {
     setPaused((p) => {
       const next = !p;
-      if (next) {
-        // entrée en pause
-        (window as any).__acrePauseStart = Date.now();
-        notify("Mesure en pause", "La trace et les marquages auto sont suspendus. Reprenez quand vous voulez.", { tag: "pause" });
-      } else {
-        const ps = (window as any).__acrePauseStart as number | undefined;
-        if (ps) setPausedMs((m) => m + (Date.now() - ps));
-        // Réinitialise lastAuto pour ne pas auto-marquer immédiatement après reprise
-        lastAutoRef.current = filteredCur ?? lastAutoRef.current;
-        notify("Mesure reprise", "Continuez votre tracé.", { tag: "resume" });
-      }
+      if (next) notify("Mesure en pause", "La trace est suspendue.", { tag: "pause" });
+      else { lastAutoRef.current = filteredCur ?? lastAutoRef.current; notify("Mesure reprise", "Continuez votre tracé.", { tag: "resume" }); }
       return next;
     });
   }
@@ -163,224 +155,293 @@ function MeasurePage() {
       createdBy: user.id,
       createdAt: Date.now(),
       status: submit ? "submitted" : "draft",
-      points,
-      trace,
+      points, trace,
       areaM2: polygonAreaM2(points),
       perimeterM: polygonPerimeterM(points),
       unit,
       deviceProfile: {
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
+        userAgent: navigator.userAgent, platform: navigator.platform,
         estimatedTier: estimateDeviceTier(bestAcc),
-        bestAccuracyM: bestAcc,
-        medianAccuracyM: median,
+        bestAccuracyM: bestAcc, medianAccuracyM: median,
         samplesCount: acceptedCount + rejectedCount,
       },
       qa: {
-        acceptedCount,
-        rejectedCount,
+        acceptedCount, rejectedCount,
         maxAcceptableAccuracyM: DEFAULT_GPS_CONFIG.maxAcceptableAccuracy,
-        bestAccuracyM: bestAcc,
-        medianAccuracyM: median,
+        bestAccuracyM: bestAcc, medianAccuracyM: median,
         liveAccuracyM: filteredCur?.accuracy,
         history: qaHistory.map((q) => ({ ts: q.ts, accuracyM: q.acc, accepted: q.ok })),
       },
     };
     await db().measurements.put(m);
     feedbackSuccess();
-    if (submit) await notify("Mesure soumise", `Levé envoyé à l'admin pour validation (${formatArea(m.areaM2, m.unit)}).`, { tag: "submit" });
+    if (submit) await notify("Mesure soumise", `Levé envoyé (${formatArea(m.areaM2, m.unit)}).`, { tag: "submit" });
     navigate({ to: "/app/parcelles/$id", params: { id: m.id } });
   }
 
   const area = polygonAreaM2(points);
   const perim = polygonPerimeterM(points);
-  const totalDistance = trace.reduce((acc, p, i) => i === 0 ? 0 : acc + haversine(trace[i - 1], p), 0);
   const accClass = filteredCur ? classifyAccuracy(filteredCur.accuracy) : "bad";
-  const guideColor: "red" | "orange" = points.length === 3 ? "red" : "orange";
   const guideTo = points.length >= 3 ? points[0] : null;
   const sortedAcc = [...accSamples].sort((a, b) => a - b);
   const medianAcc = sortedAcc.length ? sortedAcc[Math.floor(sortedAcc.length / 2)] : null;
   const totalSamples = acceptedCount + rejectedCount;
   const acceptRate = totalSamples > 0 ? Math.round((acceptedCount / totalSamples) * 100) : 0;
-  const qaReady = acceptedCount >= 30 && bestAcc <= 15 && (medianAcc ?? 99) <= 20;
+  const qaReady = acceptedCount >= 30 && bestAcc <= 12 && (medianAcc ?? 99) <= 15;
+
+  const accDot = accClass === "good" ? "bg-success" : accClass === "ok" ? "bg-warn" : "bg-destructive";
+  const accBg = accClass === "good" ? "bg-success/90" : accClass === "ok" ? "bg-warn/90" : "bg-destructive/90";
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] lg:h-screen">
-      {/* Bandeau parcelle liée */}
-      {linkedParcelle && (
-        <div className="px-3 py-2 bg-primary/10 border-b text-xs flex items-center gap-2">
-          <span className="font-semibold text-primary">Parcelle liée :</span>
-          <span className="truncate"><b>{linkedParcelle.code}</b> · {linkedParcelle.ownerName}</span>
-          <Link to="/app/parcelles/new" className="ml-auto text-[10px] underline text-muted-foreground">Changer</Link>
+    <div className="fixed inset-0 lg:relative lg:h-[calc(100vh-3.5rem)] overflow-hidden">
+      {/* CARTE PLEIN ÉCRAN */}
+      <div className="absolute inset-0">
+        <MapView
+          satellite={satellite}
+          current={filteredCur}
+          currentAccuracy={filteredCur?.accuracy}
+          perimeter={points}
+          trace={trace}
+          guideTo={guideTo}
+          guideColor="orange"
+        />
+      </div>
+
+      {/* TOP BAR FLOTTANTE — compacte */}
+      <div className="absolute top-2 left-2 right-2 z-[500] flex items-start gap-2 pointer-events-none">
+        <div className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-white text-xs font-bold shadow-elevated ${accBg}`}>
+          <span className={`w-2 h-2 rounded-full bg-white animate-pulse`} />
+          ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"}m
         </div>
-      )}
-      {!linkedParcelle && (
-        <div className="px-3 py-2 bg-warn/10 border-b text-xs flex items-center gap-2">
-          <span className="text-warn font-semibold">Aucune parcelle sélectionnée.</span>
-          <Link to="/app/parcelles/new" className="ml-auto px-2 py-1 rounded bg-warn text-white text-[10px] font-semibold">Créer la parcelle d'abord</Link>
+        {linkedParcelle ? (
+          <div className="pointer-events-auto flex-1 min-w-0 px-2.5 py-1.5 rounded-full bg-card/95 backdrop-blur shadow-elevated text-[11px] truncate">
+            <b className="text-primary">{linkedParcelle.code}</b> · {linkedParcelle.ownerName}
+          </div>
+        ) : (
+          <Link to="/app/parcelles/new" className="pointer-events-auto flex-1 px-2.5 py-1.5 rounded-full bg-warn/95 text-white text-[11px] font-semibold shadow-elevated truncate">
+            <AlertTriangle className="inline w-3 h-3 mr-1" />Créer la parcelle
+          </Link>
+        )}
+        <Link to="/app" className="pointer-events-auto p-2 rounded-full bg-card/95 backdrop-blur shadow-elevated">
+          <X className="w-4 h-4" />
+        </Link>
+      </div>
+
+      {/* BANDEAU PAUSE */}
+      {paused && running && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] px-3 py-1.5 rounded-full bg-warn text-white text-xs font-bold shadow-elevated animate-pulse">
+          ⏸ PAUSE
         </div>
       )}
 
-      {/* Top status bar */}
-      <div className="px-3 py-2 bg-card border-b flex items-center gap-2 text-xs flex-wrap">
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold
-          ${accClass === "good" ? "bg-success/15 text-success" :
-            accClass === "ok" ? "bg-warn/15 text-warn" : "bg-destructive/15 text-destructive"}`}>
-          <span className={`w-2 h-2 rounded-full ${accClass === "good" ? "bg-success" : accClass === "ok" ? "bg-warn" : "bg-destructive"}`} />
-          ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"} m
-        </span>
-        <span className="text-muted-foreground">Profil: <b className="text-foreground">{estimateDeviceTier(bestAcc)}</b></span>
-        <span className="text-muted-foreground">Best: <b className="text-foreground">±{bestAcc < 999 ? bestAcc.toFixed(1) : "—"} m</b></span>
-        <span className="text-muted-foreground">Méd: <b className="text-foreground">±{medianAcc != null ? medianAcc.toFixed(1) : "—"} m</b></span>
-        <span className="text-muted-foreground">Distance: <b className="text-foreground">{formatDistance(totalDistance)}</b></span>
-        <button onClick={() => setSatellite((s) => !s)} className="ml-auto px-3 py-1 rounded-md border text-xs">
-          {satellite ? "Vue carte" : "Vue satellite"}
+      {/* BARRE STATS FLOTTANTE — repliable */}
+      <div className="absolute top-12 right-2 z-[500] w-44">
+        <button
+          onClick={() => setStatsOpen((s) => !s)}
+          className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-t-lg bg-card/95 backdrop-blur shadow-elevated text-[11px] font-semibold border-b"
+        >
+          <span className="flex items-center gap-1.5"><Activity className="w-3 h-3" />Statistiques</span>
+          {statsOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
-      </div>
-
-      <div className="flex-1 relative">
-        <MapView satellite={satellite} current={filteredCur} currentAccuracy={filteredCur?.accuracy}
-          perimeter={points} trace={trace} guideTo={guideTo} guideColor={guideColor} />
-        {paused && running && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] px-4 py-2 rounded-full bg-warn text-white text-xs font-semibold shadow-elevated animate-pulse">
-            ⏸ Pause — déplacez-vous librement, rien n'est enregistré
-          </div>
-        )}
-        {!running && (
-          <div className="absolute inset-0 bg-background/85 backdrop-blur-sm flex items-center justify-center p-6 z-10">
-            <div className="bg-card rounded-2xl p-6 max-w-md text-center shadow-elevated">
-              <h2 className="text-xl font-bold">Démarrer la mesure</h2>
-              <p className="text-sm text-muted-foreground mt-2">
-                Positionnez-vous au point de départ (Point 1) puis marchez autour de la parcelle.
-                Bip puissant + vibration à chaque point auto-marqué (tous les 100 m).
-              </p>
-              <div className="text-xs text-warn bg-warn/10 rounded-md p-2 mt-3">
-                AcreMap utilise le GPS réel du téléphone. Le bornage légal reste réalisé par un géomètre.
-              </div>
-              <button onClick={startGps}
-                className="mt-5 w-full h-12 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-secondary">
-                Activer GPS, son & notifications
-              </button>
-            </div>
-          </div>
-        )}
-        {capturing && (
-          <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-20">
-            <div className="bg-card p-6 rounded-2xl max-w-xs text-center shadow-elevated">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">Capture statique</div>
-              <div className="text-3xl font-bold text-primary mt-2">{capturing.n} / {capturing.target}</div>
-              <div className="text-xs text-muted-foreground mt-1">échantillons GPS · ±{capturing.acc.toFixed(1)} m</div>
-              <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-primary transition-all" style={{ width: `${(capturing.n / capturing.target) * 100}%` }} />
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-3">Restez immobile.</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-card border-t p-3 lg:p-4 space-y-3">
-        {error && <div className="text-xs text-destructive bg-destructive/10 px-3 py-1.5 rounded-md">{error}</div>}
-
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <Metric label="Points" value={String(points.length)} />
-          <Metric label="Périmètre" value={formatDistance(perim)} />
-          <Metric label="Surface" value={formatArea(area, unit)} />
-        </div>
-
-        {points.length > 0 && (
-          <div className="text-[11px] text-muted-foreground text-center">
-            Distance depuis Point {points.length} : <b className="text-foreground">{formatDistance(distanceFromLast)}</b>
-            {autoMark100 && distanceFromLast < DEFAULT_GPS_CONFIG.autoMarkEveryMeters && (
-              <> · prochain auto-marquage dans {Math.max(0, DEFAULT_GPS_CONFIG.autoMarkEveryMeters - distanceFromLast).toFixed(0)} m</>
+        {statsOpen && (
+          <div className="bg-card/95 backdrop-blur shadow-elevated rounded-b-lg p-2 space-y-1 text-[11px]">
+            <Row label="Points" value={String(points.length)} />
+            <Row label="Périm." value={formatDistance(perim)} />
+            <Row label="Surface" value={formatArea(area, unit)} bold />
+            <Row label="Méd." value={medianAcc != null ? `±${medianAcc.toFixed(1)}m` : "—"} />
+            <Row label="Best" value={bestAcc < 999 ? `±${bestAcc.toFixed(1)}m` : "—"} />
+            {points.length > 0 && (
+              <Row label="Auto dans" value={`${Math.max(0, DEFAULT_GPS_CONFIG.autoMarkEveryMeters - distanceFromLast).toFixed(0)}m`} />
             )}
           </div>
         )}
+      </div>
 
-        {/* Contrôle qualité GPS — live */}
+      {/* OPTIONS RAPIDES — bouton flottant gauche */}
+      <div className="absolute top-12 left-2 z-[500] flex flex-col gap-2">
+        <button
+          onClick={() => setSatellite((s) => !s)}
+          className="p-2 rounded-full bg-card/95 backdrop-blur shadow-elevated"
+          title={satellite ? "Vue carte" : "Vue satellite"}
+        >
+          <Layers className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setOptionsOpen(true)}
+          className="p-2 rounded-full bg-card/95 backdrop-blur shadow-elevated"
+          title="Options"
+        >
+          <Settings2 className="w-4 h-4" />
+        </button>
         {running && (
-          <div className={`rounded-lg border p-2.5 text-[11px] ${qaReady ? "bg-success/5 border-success/30" : "bg-warn/5 border-warn/30"}`}>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="font-semibold text-xs">
-                {qaReady ? "✓ Qualité GPS validée" : "◌ Contrôle qualité en cours"}
-              </span>
-              <span className="text-muted-foreground">
-                {acceptedCount} acceptés / {rejectedCount} rejetés ({acceptRate}%)
-              </span>
-            </div>
-            <div className="flex items-end gap-0.5 h-8">
-              {qaHistory.slice(-30).map((q, i) => {
-                const h = Math.max(8, Math.min(32, 32 - q.acc * 0.8));
-                const cls = !q.ok ? "bg-destructive" : q.acc <= 5 ? "bg-success" : q.acc <= 10 ? "bg-warn" : "bg-orange-500";
-                return <div key={i} className={`flex-1 rounded-sm ${cls}`} style={{ height: `${h}px` }} title={`±${q.acc.toFixed(1)}m ${q.ok ? "ok" : "rejeté"}`} />;
-              })}
-              {qaHistory.length === 0 && <span className="text-muted-foreground text-[10px]">En attente du signal…</span>}
-            </div>
-            <div className="mt-1 text-[10px] text-muted-foreground">
-              Seuil acceptation ≤{DEFAULT_GPS_CONFIG.maxAcceptableAccuracy} m · médiane ±{medianAcc != null ? medianAcc.toFixed(1) : "—"} m · meilleure ±{bestAcc < 999 ? bestAcc.toFixed(1) : "—"} m
-            </div>
+          <button
+            onClick={() => setQaOpen((q) => !q)}
+            className={`p-2 rounded-full shadow-elevated ${qaReady ? "bg-success text-white" : "bg-warn text-white"}`}
+            title="Contrôle qualité GPS"
+          >
+            <Crosshair className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* PANNEAU QA FLOTTANT */}
+      {qaOpen && running && (
+        <div className="absolute top-32 left-2 z-[500] w-60 bg-card/95 backdrop-blur shadow-elevated rounded-lg p-2.5 text-[11px]">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="font-bold">{qaReady ? "✓ Qualité validée" : "◌ QA en cours"}</span>
+            <button onClick={() => setQaOpen(false)}><X className="w-3 h-3" /></button>
+          </div>
+          <div className="text-muted-foreground mb-1">{acceptedCount} acceptés / {rejectedCount} rejetés ({acceptRate}%)</div>
+          <div className="flex items-end gap-0.5 h-8">
+            {qaHistory.slice(-30).map((q, i) => {
+              const h = Math.max(8, Math.min(32, 32 - q.acc * 0.8));
+              const cls = !q.ok ? "bg-destructive" : q.acc <= 5 ? "bg-success" : q.acc <= 10 ? "bg-warn" : "bg-orange-500";
+              return <div key={i} className={`flex-1 rounded-sm ${cls}`} style={{ height: `${h}px` }} />;
+            })}
+            {qaHistory.length === 0 && <span className="text-[10px] text-muted-foreground">En attente…</span>}
+          </div>
+          <div className="mt-1.5 text-[10px] text-muted-foreground">
+            Seuil ≤{DEFAULT_GPS_CONFIG.maxAcceptableAccuracy}m · profil {estimateDeviceTier(bestAcc)}
+          </div>
+        </div>
+      )}
+
+      {/* DOCK BAS — actions principales */}
+      <div className="absolute bottom-2 left-2 right-2 z-[500] space-y-2">
+        {error && (
+          <div className="px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs text-center shadow-elevated">
+            {error}
           </div>
         )}
-
-        <div className="flex gap-2">
-          <button onClick={markPoint} disabled={!running || !!capturing || paused}
-            className="flex-1 h-12 rounded-lg bg-accent text-accent-foreground font-semibold disabled:opacity-50">
-            + Marquer un point
+        <div className="flex gap-1.5 items-stretch">
+          <button
+            onClick={markPoint}
+            disabled={!running || !!capturing || paused}
+            className="flex-1 h-14 rounded-2xl bg-accent text-accent-foreground font-bold shadow-elevated disabled:opacity-40 flex flex-col items-center justify-center gap-0.5"
+          >
+            <MapPin className="w-5 h-5" />
+            <span className="text-[11px] leading-none">Marquer</span>
           </button>
           {running && (
-            <button onClick={togglePause}
-              title={paused ? "Reprendre la mesure" : "Mettre en pause"}
-              className={`h-12 px-4 rounded-lg font-semibold ${
+            <button
+              onClick={togglePause}
+              className={`h-14 w-14 rounded-2xl shadow-elevated font-bold flex flex-col items-center justify-center gap-0.5 ${
                 paused ? "bg-success text-white" : "bg-warn text-white"
-              }`}>
-              {paused ? "▶ Reprendre" : "⏸ Pause"}
+              }`}
+            >
+              {paused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+              <span className="text-[10px] leading-none">{paused ? "Reprendre" : "Pause"}</span>
             </button>
           )}
-          <button onClick={undo} disabled={points.length === 0}
-            className="h-12 px-4 rounded-lg border font-medium disabled:opacity-40">↶</button>
+          <button
+            onClick={undo}
+            disabled={points.length === 0}
+            className="h-14 w-14 rounded-2xl bg-card shadow-elevated disabled:opacity-30 flex items-center justify-center"
+          >
+            <Undo2 className="w-5 h-5" />
+          </button>
         </div>
-
-        <div className="flex items-center gap-3 text-xs">
-          <label className="flex items-center gap-1.5">
-            <input type="checkbox" checked={autoMark100} onChange={(e) => setAutoMark100(e.target.checked)} />
-            Marquage auto 100 m
-          </label>
-          <select value={unit} onChange={(e) => setUnit(e.target.value as any)}
-            className="ml-auto px-2 py-1 rounded border bg-background">
-            <option value="ha">hectares</option>
-            <option value="m2">mètres²</option>
-            <option value="km2">km²</option>
-          </select>
-        </div>
-
-        <div className="flex gap-2">
-          <button onClick={() => save(false)} disabled={points.length < 3}
-            className="flex-1 h-11 rounded-lg border font-medium disabled:opacity-40">
-            Sauver brouillon
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => save(false)}
+            disabled={points.length < 3}
+            className="flex-1 h-10 rounded-xl bg-card/95 backdrop-blur shadow-elevated text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-1.5"
+          >
+            <Save className="w-3.5 h-3.5" />Brouillon
           </button>
           <button
             onClick={() => {
-              if (!qaReady && !confirm("Qualité GPS encore faible (peu d'échantillons ou précision insuffisante). Soumettre quand même ?")) return;
+              if (!qaReady && !confirm("Qualité GPS faible. Soumettre quand même ?")) return;
               save(true);
             }}
             disabled={points.length < 3}
-            className="flex-1 h-11 rounded-lg bg-primary text-primary-foreground font-semibold disabled:opacity-50">
-            Soumettre validation
+            className="flex-1 h-10 rounded-xl bg-primary text-primary-foreground font-semibold text-xs shadow-elevated disabled:opacity-40 flex items-center justify-center gap-1.5"
+          >
+            <Send className="w-3.5 h-3.5" />Soumettre
           </button>
         </div>
-        <p className="text-[10px] text-center text-muted-foreground">
-          Précision filtrée : ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"} m · médiane ±{medianAcc != null ? medianAcc.toFixed(1) : "—"} m · meilleure ±{bestAcc < 999 ? bestAcc.toFixed(1) : "—"} m. Bornage définitif par géomètre.
-        </p>
       </div>
+
+      {/* OVERLAY DÉMARRAGE */}
+      {!running && (
+        <div className="absolute inset-0 bg-background/85 backdrop-blur-sm flex items-center justify-center p-6 z-[1000]">
+          <div className="bg-card rounded-2xl p-6 max-w-md text-center shadow-elevated">
+            <h2 className="text-xl font-bold">Démarrer la mesure</h2>
+            <p className="text-sm text-muted-foreground mt-2">
+              Positionnez-vous au point de départ puis marchez autour de la parcelle.
+              Auto-marquage tous les 100&nbsp;m.
+            </p>
+            <div className="text-xs text-warn bg-warn/10 rounded-md p-2 mt-3">
+              Bornage légal réalisé par un géomètre assermenté.
+            </div>
+            <button
+              onClick={startGps}
+              className="mt-5 w-full h-12 bg-primary text-primary-foreground rounded-lg font-semibold"
+            >
+              Activer GPS, son & notifications
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* OVERLAY CAPTURE STATIQUE */}
+      {capturing && (
+        <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-[1000]">
+          <div className="bg-card p-6 rounded-2xl max-w-xs text-center shadow-elevated">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Capture statique</div>
+            <div className="text-3xl font-bold text-primary mt-2">{capturing.n} / {capturing.target}</div>
+            <div className="text-xs text-muted-foreground mt-1">±{capturing.acc.toFixed(1)} m</div>
+            <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-primary transition-all" style={{ width: `${(capturing.n / capturing.target) * 100}%` }} />
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-3">Restez immobile.</p>
+          </div>
+        </div>
+      )}
+
+      {/* DRAWER OPTIONS */}
+      {optionsOpen && (
+        <div className="absolute inset-0 z-[1000]" onClick={() => setOptionsOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-card rounded-t-2xl p-4 space-y-3 shadow-elevated"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold">Options de levée</h3>
+              <button onClick={() => setOptionsOpen(false)}><X className="w-5 h-5" /></button>
+            </div>
+            <label className="flex items-center justify-between text-sm">
+              <span>Marquage auto tous les 100&nbsp;m</span>
+              <input type="checkbox" checked={autoMark100} onChange={(e) => setAutoMark100(e.target.checked)} className="w-5 h-5" />
+            </label>
+            <label className="flex items-center justify-between text-sm">
+              <span>Vue satellite</span>
+              <input type="checkbox" checked={satellite} onChange={(e) => setSatellite(e.target.checked)} className="w-5 h-5" />
+            </label>
+            <label className="flex items-center justify-between text-sm">
+              <span>Unité de surface</span>
+              <select value={unit} onChange={(e) => setUnit(e.target.value as any)} className="px-2 py-1 rounded border bg-background text-sm">
+                <option value="ha">hectares</option>
+                <option value="m2">mètres²</option>
+                <option value="km2">km²</option>
+              </select>
+            </label>
+            <div className="text-[10px] text-muted-foreground pt-2 border-t">
+              Profil&nbsp;: <b>{estimateDeviceTier(bestAcc)}</b> · Échantillons&nbsp;: {totalSamples} · Précision filtrée&nbsp;: ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"}&nbsp;m
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
-    <div className="p-2 rounded-lg bg-muted">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="font-bold text-base text-primary">{value}</div>
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={bold ? "font-bold text-primary" : "font-semibold"}>{value}</span>
     </div>
   );
 }

@@ -19,11 +19,11 @@ export interface GpsConfig {
 }
 
 export const DEFAULT_GPS_CONFIG: GpsConfig = {
-  maxAcceptableAccuracy: 25,
-  staticSamples: 20,
-  staticTimeoutMs: 25_000,
+  maxAcceptableAccuracy: 15,
+  staticSamples: 30,
+  staticTimeoutMs: 30_000,
   autoMarkEveryMeters: 100,
-  kalmanProcessNoise: 1.0,
+  kalmanProcessNoise: 0.6,
 };
 
 // ---- Kalman 1D for lat & lng (independent) ----

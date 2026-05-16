@@ -215,7 +215,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
 
     // Flèche Nord
     const nx = planX + planW - 8, ny = planY + 10;
-    doc.setDrawColor(0); doc.setFillColor(0);
+    doc.setDrawColor(0, 0, 0); doc.setFillColor(0, 0, 0);
     doc.line(nx, ny + 5, nx, ny - 4);
     doc.triangle(nx - 1.5, ny - 2, nx + 1.5, ny - 2, nx, ny - 5, "F");
     doc.setFontSize(7); doc.text("N", nx, ny + 8, { align: "center" });

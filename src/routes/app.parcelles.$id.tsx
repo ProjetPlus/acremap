@@ -329,23 +329,81 @@ function ParcDetail() {
             </div>
           )}
 
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold">Morcellement automatique</h3>
-            <div className="flex items-center gap-2 text-xs">
-              <label className="flex items-center gap-1">
-                Taille lot:
-                <select value={lotHa} onChange={(e) => setLotHa(Number(e.target.value))}
-                  className="px-2 py-1 rounded border bg-background">
-                  <option value={1}>1 ha</option>
+          <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
+            <h3 className="text-sm font-semibold">Morcellement avancé</h3>
+
+            {/* Partage AC / Propriétaire */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2 text-xs font-medium">
+                <input type="checkbox" checked={partageOn} onChange={(e) => setPartageOn(e.target.checked)} />
+                Partage AC / Propriétaire
+              </label>
+              {partageOn && (
+                <div className="grid grid-cols-3 gap-1.5 text-[11px] pl-5">
+                  <select value={partageAxis} onChange={(e) => setPartageAxis(e.target.value as Axis)} className="px-2 py-1 rounded border bg-background col-span-1">
+                    <option value="horizontal">Coupe horizontale</option>
+                    <option value="vertical">Coupe verticale</option>
+                  </select>
+                  <label className="flex items-center gap-1 col-span-1">% AC
+                    <input type="number" min={5} max={95} value={pctAC} onChange={(e) => setPctAC(Number(e.target.value))} className="w-14 px-1 py-1 rounded border bg-background" />
+                  </label>
+                  <select value={partageTarget} onChange={(e) => setPartageTarget(e.target.value as any)} className="px-2 py-1 rounded border bg-background col-span-1">
+                    <option value="TOUT">Morceler tout</option>
+                    <option value="AC">Part AC seule</option>
+                    <option value="PROPRIO">Part Proprio seule</option>
+                  </select>
+                </div>
+              )}
+              {partage && (
+                <div className="text-[10px] text-muted-foreground pl-5">
+                  AC : {formatArea(partage.areaACm2)} · Proprio : {formatArea(partage.areaProprioM2)}
+                </div>
+              )}
+            </div>
+
+            {/* Voie principale */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2 text-xs font-medium">
+                <input type="checkbox" checked={voieOn} onChange={(e) => setVoieOn(e.target.checked)} />
+                Voie principale
+              </label>
+              {voieOn && (
+                <div className="grid grid-cols-2 gap-1.5 text-[11px] pl-5">
+                  <select value={voieAxis} onChange={(e) => setVoieAxis(e.target.value as Axis)} className="px-2 py-1 rounded border bg-background">
+                    <option value="horizontal">Horizontale</option>
+                    <option value="vertical">Verticale</option>
+                  </select>
+                  <select value={voieWidth} onChange={(e) => setVoieWidth(Number(e.target.value))} className="px-2 py-1 rounded border bg-background">
+                    {[3, 4, 5, 6].map((w) => <option key={w} value={w}>{w} m</option>)}
+                  </select>
+                </div>
+              )}
+              {voieResult && (
+                <div className="text-[10px] text-muted-foreground pl-5">Voie : {formatArea(voieResult.voieAreaM2)}</div>
+              )}
+            </div>
+
+            {/* Taille des lots */}
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
+              <label className="flex items-center gap-1">Lot
+                <select value={lotHa} onChange={(e) => setLotHa(Number(e.target.value))} className="flex-1 px-2 py-1 rounded border bg-background">
                   <option value={0.5}>0,5 ha</option>
+                  <option value={1}>1 ha</option>
                   <option value={2}>2 ha</option>
+                  <option value={5}>5 ha</option>
                 </select>
               </label>
-              <button onClick={() => setShowMorc((s) => !s)}
-                className="ml-auto px-3 py-1.5 rounded-md border text-xs font-medium">
-                {showMorc ? "Masquer aperçu" : "Aperçu morcellement"}
-              </button>
+              <label className="flex items-center gap-1">Sens
+                <select value={morcAxis} onChange={(e) => setMorcAxis(e.target.value as Axis)} className="flex-1 px-2 py-1 rounded border bg-background">
+                  <option value="horizontal">Bandes horiz.</option>
+                  <option value="vertical">Bandes vert.</option>
+                </select>
+              </label>
             </div>
+
+            <button onClick={() => setShowMorc((s) => !s)} className="w-full px-3 py-1.5 rounded-md border text-xs font-medium">
+              {showMorc ? "Masquer aperçu" : "Aperçu morcellement"}
+            </button>
             {showMorc && morcResult && (
               <>
                 <div className="text-xs text-muted-foreground">

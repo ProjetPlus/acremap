@@ -213,21 +213,25 @@ function ParcDetail() {
     nav({ to: "/app/parcelles" });
   }
 
-  function exportAs(kind: "geojson" | "kml" | "csv") {
+  function exportAs(kind: "geojson" | "kml" | "csv" | "dxf" | "shp") {
     const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
     const p = parc ?? null;
+    const voiePolys = voieResult ? voieResult.voie : [];
     if (kind === "geojson") downloadBlob(JSON.stringify(toGeoJSON(p, m!, lots), null, 2), `${base}.geojson`, "application/geo+json");
     else if (kind === "kml") downloadBlob(toKML(p, m!, lots), `${base}.kml`, "application/vnd.google-earth.kml+xml");
-    else downloadBlob(toCSV(m!), `${base}-points.csv`, "text/csv");
+    else if (kind === "csv") downloadBlob(toCSV(m!), `${base}-points.csv`, "text/csv");
+    else if (kind === "dxf") downloadBlob(buildDxf({ measurement: m!, parcelle: p, lots, voie: voiePolys }), `${base}.dxf`, "application/dxf");
+    else if (kind === "shp") buildShapefileZip({ measurement: m!, parcelle: p, lots }).then((blob) => downloadBlob(blob, `${base}-shapefile.zip`, "application/zip"));
   }
 
   function exportPdf() {
+    const voiePolys = voieResult ? voieResult.voie : [];
     const blob = buildGeometrePdf({
       measurement: m!, parcelle: parc ?? null, domaine: dom ?? null, sp: sp ?? null,
-      lots, operatorName: user?.fullName ?? "—",
+      lots, voie: voiePolys, operatorName: user?.fullName ?? "—",
     });
     const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
-    downloadBlob(blob, `${base}-document-travail.pdf`, "application/pdf");
+    downloadBlob(blob, `${base}-plan-geometre.pdf`, "application/pdf");
   }
 
   // Calcul des segments (distance par côté)

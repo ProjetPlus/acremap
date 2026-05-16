@@ -478,13 +478,14 @@ function ParcDetail() {
               📄 Document de travail géomètre (PDF)
             </button>
             <div className="grid grid-cols-3 gap-2">
+              <button onClick={() => exportAs("dxf")} className="h-10 rounded-md border text-xs font-semibold hover:bg-muted">DXF (AutoCAD)</button>
+              <button onClick={() => exportAs("shp")} className="h-10 rounded-md border text-xs font-semibold hover:bg-muted">Shapefile</button>
               <button onClick={() => exportAs("kml")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">KML</button>
               <button onClick={() => exportAs("geojson")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">GeoJSON</button>
-              <button onClick={() => exportAs("csv")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">CSV</button>
+              <button onClick={() => exportAs("csv")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">CSV points</button>
             </div>
             <div className="text-[10px] text-muted-foreground">
-              Le PDF inclut références AgriCapital, plan schématique, coordonnées GPS, azimuts et longueurs des côtés.
-              Les exports DXF/Shapefile arriveront avec la connexion back-end.
+              PDF mono-page A3 paysage (plan UTM, lots, voie, bornes A1..An, légende, coordonnées). DXF par calques (PARCELLE/LOTS/VOIE/BORNES). Shapefile zip (polygones + attributs).
             </div>
           </div>
 

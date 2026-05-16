@@ -120,10 +120,41 @@ function ParcDetail() {
     }
   }, [id]);
 
+  const partage = useMemo(() => {
+    if (!data?.m || !partageOn || data.m.points.length < 3) return null;
+    return partagerParcelle(data.m.points, partageAxis, pctAC);
+  }, [data?.m, partageOn, partageAxis, pctAC]);
+
+  // Polygones cibles à morceler après partage
+  const morcSources = useMemo(() => {
+    if (!data?.m) return [];
+    if (!partage) return [data.m.points];
+    if (partageTarget === "AC") return partage.partAC;
+    if (partageTarget === "PROPRIO") return partage.partProprio;
+    return [...partage.partAC, ...partage.partProprio];
+  }, [data?.m, partage, partageTarget]);
+
+  // Voie générée (sur l'union ou sur chaque source)
+  const voieResult = useMemo(() => {
+    if (!data?.m || !voieOn || data.m.points.length < 3) return null;
+    return genererVoie(data.m.points, voieAxis, voieWidth);
+  }, [data?.m, voieOn, voieAxis, voieWidth]);
+
   const morcResult = useMemo(() => {
-    if (!data?.m || data.m.points.length < 3) return null;
-    return morceler(data.m.points, lotHa);
-  }, [data?.m, lotHa]);
+    if (!data?.m || morcSources.length === 0) return null;
+    // Si voie active, on morcelle sur le reste de chaque source moins la voie centrale.
+    const sources = voieResult ? voieResult.reste : morcSources;
+    let allLots: { code: string; polygon: { lat: number; lng: number }[]; areaM2: number }[] = [];
+    let total = 0;
+    let i = 1;
+    for (const src of sources) {
+      const r = morcelerStrict(src, lotHa, morcAxis);
+      r.lots.forEach((l) => allLots.push({ ...l, code: `H${String(i++).padStart(2, "0")}` }));
+      total += r.totalAreaM2;
+    }
+    return { lots: allLots, totalAreaM2: total };
+  }, [data?.m, morcSources, voieResult, lotHa, morcAxis]);
+
 
   if (data === undefined) return <div className="p-8 text-center text-muted-foreground">Chargement…</div>;
   const { m, parc, dom, sp, lots } = data;

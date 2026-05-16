@@ -65,7 +65,7 @@ function pointDxf(layer: string, x: number, y: number, label: string): string {
 
 export function buildDxf(input: DxfInput): string {
   const { measurement: m, parcelle, lots = [], voie = [] } = input;
-  const all = [...m.points];
+  const all: { lat: number; lng: number }[] = m.points.map((p) => ({ lat: p.lat, lng: p.lng }));
   for (const l of lots) all.push(...l.polygon);
   const { zone, north } = project(all);
 

@@ -5,10 +5,14 @@ import { MapView } from "@/components/MapView";
 import { db, isBrowser } from "@/lib/db";
 import { useAuth, hasRole } from "@/lib/auth";
 import { formatArea, formatDate } from "@/lib/format";
-import { morceler } from "@/lib/morcellement";
+import { morcelerStrict } from "@/lib/morcellement";
+import { partagerParcelle, type Axis } from "@/lib/partage";
+import { genererVoie } from "@/lib/voie";
 import { refOfficielle } from "@/lib/ref";
 import { downloadBlob, toCSV, toGeoJSON, toKML } from "@/lib/export";
 import { buildGeometrePdf } from "@/lib/pdf";
+import { buildDxf } from "@/lib/dxf";
+import { buildShapefileZip } from "@/lib/shp";
 import { DEFAULT_GPS_CONFIG, haversine, polygonAreaM2, polygonPerimeterM } from "@/lib/gps";
 import type { DeviceProfile, Domaine, GpsPoint, Lot, MeasurementPoint, MeasurementQA, Parcelle, SP } from "@/lib/types";
 import { StatusBadge } from "./app.index";
@@ -82,6 +86,14 @@ function ParcDetail() {
   const [satellite, setSatellite] = useState(true);
   const [showMorc, setShowMorc] = useState(false);
   const [lotHa, setLotHa] = useState(1);
+  const [morcAxis, setMorcAxis] = useState<Axis>("horizontal");
+  const [partageOn, setPartageOn] = useState(false);
+  const [partageAxis, setPartageAxis] = useState<Axis>("horizontal");
+  const [pctAC, setPctAC] = useState(50);
+  const [partageTarget, setPartageTarget] = useState<"AC" | "PROPRIO" | "TOUT">("TOUT");
+  const [voieOn, setVoieOn] = useState(false);
+  const [voieAxis, setVoieAxis] = useState<Axis>("horizontal");
+  const [voieWidth, setVoieWidth] = useState(4);
 
   const data = useLiveQuery(async () => {
     if (!isBrowser()) return undefined;
@@ -108,10 +120,41 @@ function ParcDetail() {
     }
   }, [id]);
 
+  const partage = useMemo(() => {
+    if (!data?.m || !partageOn || data.m.points.length < 3) return null;
+    return partagerParcelle(data.m.points, partageAxis, pctAC);
+  }, [data?.m, partageOn, partageAxis, pctAC]);
+
+  // Polygones cibles à morceler après partage
+  const morcSources = useMemo(() => {
+    if (!data?.m) return [];
+    if (!partage) return [data.m.points];
+    if (partageTarget === "AC") return partage.partAC;
+    if (partageTarget === "PROPRIO") return partage.partProprio;
+    return [...partage.partAC, ...partage.partProprio];
+  }, [data?.m, partage, partageTarget]);
+
+  // Voie générée (sur l'union ou sur chaque source)
+  const voieResult = useMemo(() => {
+    if (!data?.m || !voieOn || data.m.points.length < 3) return null;
+    return genererVoie(data.m.points, voieAxis, voieWidth);
+  }, [data?.m, voieOn, voieAxis, voieWidth]);
+
   const morcResult = useMemo(() => {
-    if (!data?.m || data.m.points.length < 3) return null;
-    return morceler(data.m.points, lotHa);
-  }, [data?.m, lotHa]);
+    if (!data?.m || morcSources.length === 0) return null;
+    // Si voie active, on morcelle sur le reste de chaque source moins la voie centrale.
+    const sources = voieResult ? voieResult.reste : morcSources;
+    let allLots: { code: string; polygon: { lat: number; lng: number }[]; areaM2: number }[] = [];
+    let total = 0;
+    let i = 1;
+    for (const src of sources) {
+      const r = morcelerStrict(src, lotHa, morcAxis);
+      r.lots.forEach((l) => allLots.push({ ...l, code: `H${String(i++).padStart(2, "0")}` }));
+      total += r.totalAreaM2;
+    }
+    return { lots: allLots, totalAreaM2: total };
+  }, [data?.m, morcSources, voieResult, lotHa, morcAxis]);
+
 
   if (data === undefined) return <div className="p-8 text-center text-muted-foreground">Chargement…</div>;
   const { m, parc, dom, sp, lots } = data;
@@ -170,21 +213,25 @@ function ParcDetail() {
     nav({ to: "/app/parcelles" });
   }
 
-  function exportAs(kind: "geojson" | "kml" | "csv") {
+  function exportAs(kind: "geojson" | "kml" | "csv" | "dxf" | "shp") {
     const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
     const p = parc ?? null;
+    const voiePolys = voieResult ? voieResult.voie : [];
     if (kind === "geojson") downloadBlob(JSON.stringify(toGeoJSON(p, m!, lots), null, 2), `${base}.geojson`, "application/geo+json");
     else if (kind === "kml") downloadBlob(toKML(p, m!, lots), `${base}.kml`, "application/vnd.google-earth.kml+xml");
-    else downloadBlob(toCSV(m!), `${base}-points.csv`, "text/csv");
+    else if (kind === "csv") downloadBlob(toCSV(m!), `${base}-points.csv`, "text/csv");
+    else if (kind === "dxf") downloadBlob(buildDxf({ measurement: m!, parcelle: p, lots, voie: voiePolys }), `${base}.dxf`, "application/dxf");
+    else if (kind === "shp") buildShapefileZip({ measurement: m!, parcelle: p, lots }).then((blob) => downloadBlob(blob, `${base}-shapefile.zip`, "application/zip"));
   }
 
   function exportPdf() {
+    const voiePolys = voieResult ? voieResult.voie : [];
     const blob = buildGeometrePdf({
       measurement: m!, parcelle: parc ?? null, domaine: dom ?? null, sp: sp ?? null,
-      lots, operatorName: user?.fullName ?? "—",
+      lots, voie: voiePolys, operatorName: user?.fullName ?? "—",
     });
     const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
-    downloadBlob(blob, `${base}-document-travail.pdf`, "application/pdf");
+    downloadBlob(blob, `${base}-plan-geometre.pdf`, "application/pdf");
   }
 
   // Calcul des segments (distance par côté)
@@ -282,23 +329,81 @@ function ParcDetail() {
             </div>
           )}
 
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold">Morcellement automatique</h3>
-            <div className="flex items-center gap-2 text-xs">
-              <label className="flex items-center gap-1">
-                Taille lot:
-                <select value={lotHa} onChange={(e) => setLotHa(Number(e.target.value))}
-                  className="px-2 py-1 rounded border bg-background">
-                  <option value={1}>1 ha</option>
+          <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
+            <h3 className="text-sm font-semibold">Morcellement avancé</h3>
+
+            {/* Partage AC / Propriétaire */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2 text-xs font-medium">
+                <input type="checkbox" checked={partageOn} onChange={(e) => setPartageOn(e.target.checked)} />
+                Partage AC / Propriétaire
+              </label>
+              {partageOn && (
+                <div className="grid grid-cols-3 gap-1.5 text-[11px] pl-5">
+                  <select value={partageAxis} onChange={(e) => setPartageAxis(e.target.value as Axis)} className="px-2 py-1 rounded border bg-background col-span-1">
+                    <option value="horizontal">Coupe horizontale</option>
+                    <option value="vertical">Coupe verticale</option>
+                  </select>
+                  <label className="flex items-center gap-1 col-span-1">% AC
+                    <input type="number" min={5} max={95} value={pctAC} onChange={(e) => setPctAC(Number(e.target.value))} className="w-14 px-1 py-1 rounded border bg-background" />
+                  </label>
+                  <select value={partageTarget} onChange={(e) => setPartageTarget(e.target.value as any)} className="px-2 py-1 rounded border bg-background col-span-1">
+                    <option value="TOUT">Morceler tout</option>
+                    <option value="AC">Part AC seule</option>
+                    <option value="PROPRIO">Part Proprio seule</option>
+                  </select>
+                </div>
+              )}
+              {partage && (
+                <div className="text-[10px] text-muted-foreground pl-5">
+                  AC : {formatArea(partage.areaACm2)} · Proprio : {formatArea(partage.areaProprioM2)}
+                </div>
+              )}
+            </div>
+
+            {/* Voie principale */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2 text-xs font-medium">
+                <input type="checkbox" checked={voieOn} onChange={(e) => setVoieOn(e.target.checked)} />
+                Voie principale
+              </label>
+              {voieOn && (
+                <div className="grid grid-cols-2 gap-1.5 text-[11px] pl-5">
+                  <select value={voieAxis} onChange={(e) => setVoieAxis(e.target.value as Axis)} className="px-2 py-1 rounded border bg-background">
+                    <option value="horizontal">Horizontale</option>
+                    <option value="vertical">Verticale</option>
+                  </select>
+                  <select value={voieWidth} onChange={(e) => setVoieWidth(Number(e.target.value))} className="px-2 py-1 rounded border bg-background">
+                    {[3, 4, 5, 6].map((w) => <option key={w} value={w}>{w} m</option>)}
+                  </select>
+                </div>
+              )}
+              {voieResult && (
+                <div className="text-[10px] text-muted-foreground pl-5">Voie : {formatArea(voieResult.voieAreaM2)}</div>
+              )}
+            </div>
+
+            {/* Taille des lots */}
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
+              <label className="flex items-center gap-1">Lot
+                <select value={lotHa} onChange={(e) => setLotHa(Number(e.target.value))} className="flex-1 px-2 py-1 rounded border bg-background">
                   <option value={0.5}>0,5 ha</option>
+                  <option value={1}>1 ha</option>
                   <option value={2}>2 ha</option>
+                  <option value={5}>5 ha</option>
                 </select>
               </label>
-              <button onClick={() => setShowMorc((s) => !s)}
-                className="ml-auto px-3 py-1.5 rounded-md border text-xs font-medium">
-                {showMorc ? "Masquer aperçu" : "Aperçu morcellement"}
-              </button>
+              <label className="flex items-center gap-1">Sens
+                <select value={morcAxis} onChange={(e) => setMorcAxis(e.target.value as Axis)} className="flex-1 px-2 py-1 rounded border bg-background">
+                  <option value="horizontal">Bandes horiz.</option>
+                  <option value="vertical">Bandes vert.</option>
+                </select>
+              </label>
             </div>
+
+            <button onClick={() => setShowMorc((s) => !s)} className="w-full px-3 py-1.5 rounded-md border text-xs font-medium">
+              {showMorc ? "Masquer aperçu" : "Aperçu morcellement"}
+            </button>
             {showMorc && morcResult && (
               <>
                 <div className="text-xs text-muted-foreground">
@@ -373,13 +478,14 @@ function ParcDetail() {
               📄 Document de travail géomètre (PDF)
             </button>
             <div className="grid grid-cols-3 gap-2">
+              <button onClick={() => exportAs("dxf")} className="h-10 rounded-md border text-xs font-semibold hover:bg-muted">DXF (AutoCAD)</button>
+              <button onClick={() => exportAs("shp")} className="h-10 rounded-md border text-xs font-semibold hover:bg-muted">Shapefile</button>
               <button onClick={() => exportAs("kml")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">KML</button>
               <button onClick={() => exportAs("geojson")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">GeoJSON</button>
-              <button onClick={() => exportAs("csv")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">CSV</button>
+              <button onClick={() => exportAs("csv")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">CSV points</button>
             </div>
             <div className="text-[10px] text-muted-foreground">
-              Le PDF inclut références AgriCapital, plan schématique, coordonnées GPS, azimuts et longueurs des côtés.
-              Les exports DXF/Shapefile arriveront avec la connexion back-end.
+              PDF mono-page A3 paysage (plan UTM, lots, voie, bornes A1..An, légende, coordonnées). DXF par calques (PARCELLE/LOTS/VOIE/BORNES). Shapefile zip (polygones + attributs).
             </div>
           </div>
 

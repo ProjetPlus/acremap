@@ -86,6 +86,14 @@ function ParcDetail() {
   const [satellite, setSatellite] = useState(true);
   const [showMorc, setShowMorc] = useState(false);
   const [lotHa, setLotHa] = useState(1);
+  const [morcAxis, setMorcAxis] = useState<Axis>("horizontal");
+  const [partageOn, setPartageOn] = useState(false);
+  const [partageAxis, setPartageAxis] = useState<Axis>("horizontal");
+  const [pctAC, setPctAC] = useState(50);
+  const [partageTarget, setPartageTarget] = useState<"AC" | "PROPRIO" | "TOUT">("TOUT");
+  const [voieOn, setVoieOn] = useState(false);
+  const [voieAxis, setVoieAxis] = useState<Axis>("horizontal");
+  const [voieWidth, setVoieWidth] = useState(4);
 
   const data = useLiveQuery(async () => {
     if (!isBrowser()) return undefined;

@@ -224,7 +224,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     const scaleM = niceStep((maxX - minX) / 5);
     const sxLen = scaleM * scale;
     const sx0 = planX + 4, sy0 = planY + planH - 6;
-    doc.setDrawColor(0); doc.setLineWidth(0.5);
+    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.5);
     doc.line(sx0, sy0, sx0 + sxLen, sy0);
     doc.line(sx0, sy0 - 1, sx0, sy0 + 1);
     doc.line(sx0 + sxLen, sy0 - 1, sx0 + sxLen, sy0 + 1);

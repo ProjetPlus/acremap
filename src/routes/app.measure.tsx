@@ -79,7 +79,10 @@ function MeasurePage() {
       setTrace((tr) => {
         const last = tr[tr.length - 1];
         if (!accepted) return tr;
-        if (last && haversine(last, filtered) < 1) return tr;
+        // Anti-dérive immobile : exiger un mouvement > max(2 m, 0,7 × précision brute)
+        // sinon le filtre Kalman fait avancer la trace même à l'arrêt.
+        const minMove = Math.max(2, raw.accuracy * 0.7);
+        if (last && haversine(last, filtered) < minMove) return tr;
         return [...tr, filtered];
       });
       setPoints((pts) => {
@@ -351,13 +354,15 @@ function MeasurePage() {
           </button>
           <button
             onClick={() => {
-              if (!qaReady && !confirm("Qualité GPS faible. Soumettre quand même ?")) return;
+              if (points.length < 3) return;
+              if (!confirm(`Terminer la levée ?\n${points.length} points · ${formatArea(area, unit)}\nLa mesure sera soumise pour validation.`)) return;
+              if (!qaReady && !confirm("Qualité GPS faible. Terminer quand même ?")) return;
               save(true);
             }}
             disabled={points.length < 3}
-            className="flex-1 h-10 rounded-xl bg-primary text-primary-foreground font-semibold text-xs shadow-elevated disabled:opacity-40 flex items-center justify-center gap-1.5"
+            className="flex-1 h-10 rounded-xl bg-destructive text-destructive-foreground font-bold text-xs shadow-elevated disabled:opacity-40 flex items-center justify-center gap-1.5"
           >
-            <Send className="w-3.5 h-3.5" />Soumettre
+            <Send className="w-3.5 h-3.5" />TERMINER LA LEVÉE
           </button>
         </div>
       </div>
@@ -366,20 +371,21 @@ function MeasurePage() {
       {!running && (
         <div className="absolute inset-0 bg-background/85 backdrop-blur-sm flex items-center justify-center p-6 z-[1000]">
           <div className="bg-card rounded-2xl p-6 max-w-md text-center shadow-elevated">
-            <h2 className="text-xl font-bold">Démarrer la mesure</h2>
+            <h2 className="text-xl font-bold">Prêt pour la levée GPS</h2>
             <p className="text-sm text-muted-foreground mt-2">
               Positionnez-vous au point de départ puis marchez autour de la parcelle.
-              Auto-marquage tous les 100&nbsp;m.
+              Auto-marquage tous les 100&nbsp;m. Tant que vous êtes immobile, le tracé n'avance pas.
             </p>
             <div className="text-xs text-warn bg-warn/10 rounded-md p-2 mt-3">
               Bornage légal réalisé par un géomètre assermenté.
             </div>
             <button
               onClick={startGps}
-              className="mt-5 w-full h-12 bg-primary text-primary-foreground rounded-lg font-semibold"
+              className="mt-5 w-full h-14 bg-primary text-primary-foreground rounded-xl font-bold text-base shadow-elevated"
             >
-              Activer GPS, son & notifications
+              ▶ DÉMARRER LA LEVÉE
             </button>
+            <p className="text-[10px] text-muted-foreground mt-2">Active GPS, son et notifications</p>
           </div>
         </div>
       )}

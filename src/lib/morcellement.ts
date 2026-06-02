@@ -90,16 +90,21 @@ export function morcelerStrict(
     polys.sort((a, b) => polygonAreaM2(b) - polygonAreaM2(a));
     const best = polys[0];
     const code = `H${String(lots.length + 1).padStart(2, "0")}`;
-    lots.push({ code, polygon: best, areaM2: polygonAreaM2(best) });
+    lots.push({ code, polygon: best, areaM2: polygonAreaM2(best), bornes: bornesFor(code, best) });
     // subtract
     const rest = diffSafe(remaining, bandFeature) as Feature<Polygon | MultiPolygon> | null;
     remaining = rest;
     iter++;
   }
   if (remaining) {
+    let ri = 0;
     for (const p of extractPolys(remaining)) {
       const a = polygonAreaM2(p);
-      if (a > 50) reste.push({ polygon: p, areaM2: a });
+      if (a > 50) {
+        ri++;
+        const code = `R${String(ri).padStart(2, "0")}`;
+        reste.push({ code, polygon: p, areaM2: a, bornes: bornesFor(code, p) });
+      }
     }
   }
   return { lots, reste, totalAreaM2, lotAreaTargetM2: targetM2 };

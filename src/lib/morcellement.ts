@@ -5,12 +5,16 @@ import type { Feature, Polygon, MultiPolygon } from "geojson";
 import { polygonAreaM2 } from "./gps";
 import type { Pt, Axis } from "./partage";
 
-export interface MorcLot { code: string; polygon: Pt[]; areaM2: number }
+export interface Borne { label: string; lat: number; lng: number }
+export interface MorcLot { code: string; polygon: Pt[]; areaM2: number; bornes: Borne[] }
 export interface MorcResult {
   lots: MorcLot[];
-  reste: { polygon: Pt[]; areaM2: number }[];
+  reste: { code: string; polygon: Pt[]; areaM2: number; bornes: Borne[] }[];
   totalAreaM2: number;
   lotAreaTargetM2: number;
+}
+function bornesFor(code: string, poly: Pt[]): Borne[] {
+  return poly.map((p, i) => ({ label: `${code}-B${i + 1}`, lat: p.lat, lng: p.lng }));
 }
 
 function ringFromPts(pts: Pt[]): number[][] {

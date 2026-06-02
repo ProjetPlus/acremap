@@ -5,12 +5,16 @@ import type { Feature, Polygon, MultiPolygon } from "geojson";
 import { polygonAreaM2 } from "./gps";
 import type { Pt, Axis } from "./partage";
 
-export interface MorcLot { code: string; polygon: Pt[]; areaM2: number }
+export interface Borne { label: string; lat: number; lng: number }
+export interface MorcLot { code: string; polygon: Pt[]; areaM2: number; bornes: Borne[] }
 export interface MorcResult {
   lots: MorcLot[];
-  reste: { polygon: Pt[]; areaM2: number }[];
+  reste: { code: string; polygon: Pt[]; areaM2: number; bornes: Borne[] }[];
   totalAreaM2: number;
   lotAreaTargetM2: number;
+}
+function bornesFor(code: string, poly: Pt[]): Borne[] {
+  return poly.map((p, i) => ({ label: `${code}-B${i + 1}`, lat: p.lat, lng: p.lng }));
 }
 
 function ringFromPts(pts: Pt[]): number[][] {
@@ -52,7 +56,7 @@ export function morcelerStrict(
   const initialPoly = turf.polygon([ring]) as Feature<Polygon>;
   const totalAreaM2 = polygonAreaM2(perimeter);
   const lots: MorcLot[] = [];
-  const reste: { polygon: Pt[]; areaM2: number }[] = [];
+  const reste: { code: string; polygon: Pt[]; areaM2: number; bornes: Borne[] }[] = [];
 
   let remaining: Feature<Polygon | MultiPolygon> | null = initialPoly;
   let iter = 0;
@@ -67,33 +71,40 @@ export function morcelerStrict(
     let hi = axis === "horizontal" ? maxY : maxX;
     let bandFeature: Feature<Polygon | MultiPolygon> | null = null;
     let bandArea = 0;
-    for (let bi = 0; bi < 28; bi++) {
+    // Bissection stricte ±0,1 % (≤ 10 m² pour 1 ha)
+    for (let bi = 0; bi < 48; bi++) {
       const mid = (lo + hi) / 2;
       const cutBox: Feature<Polygon> = axis === "horizontal"
         ? turf.polygon([[[minX - 1, minY - 1], [maxX + 1, minY - 1], [maxX + 1, mid], [minX - 1, mid], [minX - 1, minY - 1]]])
         : turf.polygon([[[minX - 1, minY - 1], [mid, minY - 1], [mid, maxY + 1], [minX - 1, maxY + 1], [minX - 1, minY - 1]]]);
       const inter = intersectSafe(remaining, cutBox) as any;
       const area = extractPolys(inter).reduce((s, p) => s + polygonAreaM2(p), 0);
-      if (Math.abs(area - targetM2) / targetM2 < 0.005) { bandFeature = inter; bandArea = area; break; }
-      if (area > targetM2) hi = mid; else lo = mid;
       bandFeature = inter; bandArea = area;
+      if (Math.abs(area - targetM2) / targetM2 < 0.001) break;
+      if (area > targetM2) hi = mid; else lo = mid;
     }
-    if (!bandFeature || bandArea < targetM2 * 0.95) break;
+    // Si on n'atteint pas 99,5 % du target → reste, on arrête
+    if (!bandFeature || bandArea < targetM2 * 0.995) break;
     // Take the largest piece if multipolygon
     const polys = extractPolys(bandFeature);
     polys.sort((a, b) => polygonAreaM2(b) - polygonAreaM2(a));
     const best = polys[0];
     const code = `H${String(lots.length + 1).padStart(2, "0")}`;
-    lots.push({ code, polygon: best, areaM2: polygonAreaM2(best) });
+    lots.push({ code, polygon: best, areaM2: polygonAreaM2(best), bornes: bornesFor(code, best) });
     // subtract
     const rest = diffSafe(remaining, bandFeature) as Feature<Polygon | MultiPolygon> | null;
     remaining = rest;
     iter++;
   }
   if (remaining) {
+    let ri = 0;
     for (const p of extractPolys(remaining)) {
       const a = polygonAreaM2(p);
-      if (a > 50) reste.push({ polygon: p, areaM2: a });
+      if (a > 50) {
+        ri++;
+        const code = `R${String(ri).padStart(2, "0")}`;
+        reste.push({ code, polygon: p, areaM2: a, bornes: bornesFor(code, p) });
+      }
     }
   }
   return { lots, reste, totalAreaM2, lotAreaTargetM2: targetM2 };

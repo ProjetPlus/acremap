@@ -56,7 +56,7 @@ export function morcelerStrict(
   const initialPoly = turf.polygon([ring]) as Feature<Polygon>;
   const totalAreaM2 = polygonAreaM2(perimeter);
   const lots: MorcLot[] = [];
-  const reste: { polygon: Pt[]; areaM2: number }[] = [];
+  const reste: { code: string; polygon: Pt[]; areaM2: number; bornes: Borne[] }[] = [];
 
   let remaining: Feature<Polygon | MultiPolygon> | null = initialPoly;
   let iter = 0;

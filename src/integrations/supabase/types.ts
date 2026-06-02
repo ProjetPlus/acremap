@@ -14,16 +14,428 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      domaines: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          notes: string | null
+          sp_id: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          sp_id: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          sp_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domaines_sp_id_fkey"
+            columns: ["sp_id"]
+            isOneToOne: false
+            referencedRelation: "sps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lots: {
+        Row: {
+          area_m2: number
+          assigned_at: string | null
+          assignee_name: string | null
+          bornes: Json
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_reserve: boolean
+          measurement_id: string
+          parcelle_id: string
+          polygon: Json
+          updated_at: string
+        }
+        Insert: {
+          area_m2: number
+          assigned_at?: string | null
+          assignee_name?: string | null
+          bornes?: Json
+          code: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_reserve?: boolean
+          measurement_id: string
+          parcelle_id: string
+          polygon: Json
+          updated_at?: string
+        }
+        Update: {
+          area_m2?: number
+          assigned_at?: string | null
+          assignee_name?: string | null
+          bornes?: Json
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_reserve?: boolean
+          measurement_id?: string
+          parcelle_id?: string
+          polygon?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lots_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lots_parcelle_id_fkey"
+            columns: ["parcelle_id"]
+            isOneToOne: false
+            referencedRelation: "parcelles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      measurements: {
+        Row: {
+          area_m2: number
+          created_at: string
+          created_by: string | null
+          device_profile: Json | null
+          id: string
+          notes: string | null
+          parcelle_id: string | null
+          perimeter_m: number
+          points: Json
+          qa: Json | null
+          status: Database["public"]["Enums"]["measurement_status"]
+          trace: Json
+          unit: string
+          updated_at: string
+          validated_at: string | null
+          validated_by: string | null
+        }
+        Insert: {
+          area_m2?: number
+          created_at?: string
+          created_by?: string | null
+          device_profile?: Json | null
+          id?: string
+          notes?: string | null
+          parcelle_id?: string | null
+          perimeter_m?: number
+          points?: Json
+          qa?: Json | null
+          status?: Database["public"]["Enums"]["measurement_status"]
+          trace?: Json
+          unit?: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Update: {
+          area_m2?: number
+          created_at?: string
+          created_by?: string | null
+          device_profile?: Json | null
+          id?: string
+          notes?: string | null
+          parcelle_id?: string | null
+          perimeter_m?: number
+          points?: Json
+          qa?: Json | null
+          status?: Database["public"]["Enums"]["measurement_status"]
+          trace?: Json
+          unit?: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "measurements_parcelle_id_fkey"
+            columns: ["parcelle_id"]
+            isOneToOne: false
+            referencedRelation: "parcelles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parcelles: {
+        Row: {
+          code: string
+          convention_date: string | null
+          convention_status: string | null
+          created_at: string
+          created_by: string | null
+          declared_area: number | null
+          domaine_id: string
+          group_photo: string | null
+          id: string
+          notes: string | null
+          owner_name: string
+          owner_phone: string | null
+          owner_photo: string | null
+          parcelle_photo: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          convention_date?: string | null
+          convention_status?: string | null
+          created_at?: string
+          created_by?: string | null
+          declared_area?: number | null
+          domaine_id: string
+          group_photo?: string | null
+          id?: string
+          notes?: string | null
+          owner_name: string
+          owner_phone?: string | null
+          owner_photo?: string | null
+          parcelle_photo?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          convention_date?: string | null
+          convention_status?: string | null
+          created_at?: string
+          created_by?: string | null
+          declared_area?: number | null
+          domaine_id?: string
+          group_photo?: string | null
+          id?: string
+          notes?: string | null
+          owner_name?: string
+          owner_phone?: string | null
+          owner_photo?: string | null
+          parcelle_photo?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parcelles_domaine_id_fkey"
+            columns: ["domaine_id"]
+            isOneToOne: false
+            referencedRelation: "domaines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partages: {
+        Row: {
+          area_ac_m2: number
+          area_proprio_m2: number
+          axis: string
+          created_at: string
+          created_by: string | null
+          id: string
+          measurement_id: string
+          part_ac: Json
+          part_proprio: Json
+          pct_ac: number
+        }
+        Insert: {
+          area_ac_m2: number
+          area_proprio_m2: number
+          axis: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          measurement_id: string
+          part_ac: Json
+          part_proprio: Json
+          pct_ac: number
+        }
+        Update: {
+          area_ac_m2?: number
+          area_proprio_m2?: number
+          axis?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          measurement_id?: string
+          part_ac?: Json
+          part_proprio?: Json
+          pct_ac?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partages_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      sps: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          departement: string | null
+          district: string | null
+          id: string
+          name: string
+          notes: string | null
+          region: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          departement?: string | null
+          district?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          region?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          departement?: string | null
+          district?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          region?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      voies: {
+        Row: {
+          area_m2: number
+          axis: string
+          created_at: string
+          created_by: string | null
+          id: string
+          measurement_id: string
+          polygon: Json
+          width_m: number
+        }
+        Insert: {
+          area_m2: number
+          axis: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          measurement_id: string
+          polygon: Json
+          width_m: number
+        }
+        Update: {
+          area_m2?: number
+          axis?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          measurement_id?: string
+          polygon?: Json
+          width_m?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voies_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "agent" | "viewer"
+      measurement_status: "draft" | "submitted" | "validated" | "archived"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +562,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "agent", "viewer"],
+      measurement_status: ["draft", "submitted", "validated", "archived"],
+    },
   },
 } as const

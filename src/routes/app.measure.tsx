@@ -56,6 +56,7 @@ function MeasurePage() {
   const [qaOpen, setQaOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const lastAutoRef = useRef<GpsPoint | null>(null);
+  const stablePosRef = useRef<GpsPoint | null>(null);
   const watchRef = useRef<{ stop: () => void } | null>(null);
   const pausedRef = useRef(false);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
@@ -65,7 +66,6 @@ function MeasurePage() {
     setError(null);
     const handle = startWatch((raw, filtered) => {
       setCurrent(raw);
-      setFilteredCur(filtered);
       const accepted = raw.accuracy <= DEFAULT_GPS_CONFIG.maxAcceptableAccuracy;
       if (accepted) {
         if (raw.accuracy < bestAcc) setBestAcc(raw.accuracy);
@@ -76,15 +76,28 @@ function MeasurePage() {
       }
       setQaHistory((h) => [...h.slice(-29), { ts: raw.ts, acc: raw.accuracy, ok: accepted }]);
       if (pausedRef.current) return;
-      setTrace((tr) => {
-        const last = tr[tr.length - 1];
-        if (!accepted) return tr;
-        // Anti-dérive immobile : exiger un mouvement > max(2 m, 0,7 × précision brute)
-        // sinon le filtre Kalman fait avancer la trace même à l'arrêt.
-        const minMove = Math.max(2, raw.accuracy * 0.7);
-        if (last && haversine(last, filtered) < minMove) return tr;
-        return [...tr, filtered];
-      });
+      if (!accepted) return;
+
+      const stable = stablePosRef.current;
+      if (!stable) {
+        stablePosRef.current = filtered;
+        setFilteredCur(filtered);
+        setTrace((tr) => (tr.length ? tr : [filtered]));
+        return;
+      }
+
+      // Anti-dérive terrain : une nouvelle position n'est acceptée que si le
+      // déplacement dépasse largement l'incertitude GPS. À l'arrêt, le point
+      // affiché et la trace restent verrouillés au dernier point stable.
+      const minMove = Math.max(8, raw.accuracy * 2, filtered.accuracy * 2.5);
+      if (haversine(stable, filtered) < minMove) {
+        setDistanceFromLast(0);
+        return;
+      }
+
+      stablePosRef.current = filtered;
+      setFilteredCur(filtered);
+      setTrace((tr) => [...tr, filtered]);
       setPoints((pts) => {
         if (pts.length === 0) return pts;
         const last = pts[pts.length - 1];
@@ -111,6 +124,10 @@ function MeasurePage() {
   async function startGps() {
     await unlockAudio();
     await requestNotificationPermission();
+    stablePosRef.current = null;
+    lastAutoRef.current = null;
+    setTrace([]);
+    setFilteredCur(null);
     setRunning(true);
   }
   function togglePause() {
@@ -310,7 +327,7 @@ function MeasurePage() {
       )}
 
       {/* DOCK BAS — actions principales */}
-      <div className="absolute bottom-2 left-2 right-2 z-[500] space-y-2">
+      <div className="absolute left-2 right-2 z-[1200] space-y-2 bottom-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         {error && (
           <div className="px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs text-center shadow-elevated">
             {error}

@@ -420,11 +420,16 @@ function ParcDetail() {
             {showMorc && morcResult && (
               <>
                 <div className="text-xs text-muted-foreground">
-                  Aperçu : {morcResult.lots.length} lots — {formatArea(morcResult.totalAreaM2)} total
+                  Aperçu : {morcResult.lots.filter((l) => !l.isReserve).length} lots stricts de {lotHa} ha — {morcResult.lots.filter((l) => l.isReserve).length} réserve(s) — {formatArea(morcResult.totalAreaM2)} total
                 </div>
+                {!morcResult.strictValid && (
+                  <div className="text-[11px] rounded-md bg-destructive/10 text-destructive p-2">
+                    Découpe bloquée : {morcResult.errors.join(" · ") || `chaque lot doit être exactement ${lotHa} ha`}.
+                  </div>
+                )}
                 <button onClick={saveMorc} disabled={morcResult.lots.length === 0}
                   className="w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">
-                  Valider et créer les {morcResult.lots.length} lots
+                  Valider les lots stricts + réserve
                 </button>
               </>
             )}
@@ -432,7 +437,7 @@ function ParcDetail() {
             {lots.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-muted px-2 py-1.5 text-[11px] font-semibold flex items-center justify-between">
-                  <span>{lots.length} lots créés</span>
+                  <span>{lots.filter((l) => !l.isReserve).length} lots · {lots.filter((l) => l.isReserve).length} réserve(s)</span>
                   <button onClick={deleteLots} className="text-destructive text-[10px] hover:underline">Tout supprimer</button>
                 </div>
                 <div className="max-h-48 overflow-y-auto">
@@ -440,15 +445,15 @@ function ParcDetail() {
                     <thead className="bg-muted/50 sticky top-0">
                       <tr>
                         <th className="text-left p-1.5">Code</th>
-                        <th className="text-right p-1.5">Surface</th>
+                          <th className="text-right p-1.5">Surface</th>
                         <th className="text-left p-1.5">Souscripteur</th>
                       </tr>
                     </thead>
                     <tbody>
                       {lots.map((l) => (
                         <tr key={l.id} className="border-t">
-                          <td className="p-1.5 font-mono">{l.code}</td>
-                          <td className="p-1.5 text-right">{formatArea(l.areaM2)}</td>
+                          <td className="p-1.5 font-mono">{l.code}{l.isReserve ? " · Réserve" : ""}</td>
+                          <td className="p-1.5 text-right">{l.isReserve ? formatArea(l.areaM2) : `${l.areaM2 / 10_000} ha`}</td>
                           <td className="p-1.5">
                             <button onClick={() => assignLot(l.id)}
                               className="text-left text-primary hover:underline truncate max-w-[120px]">

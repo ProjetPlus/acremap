@@ -48,10 +48,11 @@ function AppLayout() {
 
   if (!hydrated || !user) return null;
   const items = NAV.filter((n) => !n.admin || user.role === "admin");
+  const isMeasureRoute = path === "/app/measure";
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-muted/30">
-      <aside className="hidden lg:flex w-64 flex-col bg-sidebar text-sidebar-foreground">
+      <aside className={`${isMeasureRoute ? "lg:hidden" : "hidden lg:flex"} w-64 flex-col bg-sidebar text-sidebar-foreground`}>
         <div className="p-5 border-b border-sidebar-border">
           <Logo className="h-9 w-9" showText />
         </div>
@@ -92,7 +93,7 @@ function AppLayout() {
         </div>
       </aside>
 
-      <header className="lg:hidden flex items-center justify-between p-3 bg-card border-b">
+      <header className={`${isMeasureRoute ? "hidden" : "lg:hidden flex"} items-center justify-between p-3 bg-card border-b`}>
         <Logo className="h-8 w-8" showText />
         <div className="flex items-center gap-2">
           {notifPerm !== "granted" && notifPerm !== "unsupported" && (
@@ -104,11 +105,11 @@ function AppLayout() {
         </div>
       </header>
 
-      <main className="flex-1 min-w-0 pb-24 lg:pb-0">
+      <main className={`flex-1 min-w-0 ${isMeasureRoute ? "pb-0" : "pb-24 lg:pb-0"}`}>
         <Outlet />
       </main>
 
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-card border-t flex items-stretch justify-around z-30 safe-area-bottom">
+      <nav className={`${isMeasureRoute ? "hidden" : "lg:hidden flex"} fixed bottom-0 inset-x-0 bg-card border-t items-stretch justify-around z-30 safe-area-bottom`}>
         {items.slice(0, 4).map((n) => {
           const active = path === n.to || (n.to !== "/app" && path.startsWith(n.to));
           return (

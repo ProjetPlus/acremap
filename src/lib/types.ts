@@ -79,6 +79,8 @@ export interface Lot {
   code: string;
   polygon: { lat: number; lng: number }[];
   areaM2: number;
+  bornes?: { label: string; lat: number; lng: number }[];
+  isReserve?: boolean;
   assigneeName?: string;
   assignedAt?: number;
 }

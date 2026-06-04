@@ -144,15 +144,21 @@ function ParcDetail() {
     if (!data?.m || morcSources.length === 0) return null;
     // Si voie active, on morcelle sur le reste de chaque source moins la voie centrale.
     const sources = voieResult ? voieResult.reste : morcSources;
-    let allLots: { code: string; polygon: { lat: number; lng: number }[]; areaM2: number }[] = [];
+    let allLots: { code: string; polygon: { lat: number; lng: number }[]; areaM2: number; bornes?: { label: string; lat: number; lng: number }[]; isReserve?: boolean }[] = [];
     let total = 0;
     let i = 1;
+    let ri = 1;
+    let strictValid = true;
+    const errors: string[] = [];
     for (const src of sources) {
       const r = morcelerStrict(src, lotHa, morcAxis);
-      r.lots.forEach((l) => allLots.push({ ...l, code: `H${String(i++).padStart(2, "0")}` }));
+      r.lots.forEach((l) => allLots.push({ ...l, code: `H${String(i++).padStart(2, "0")}`, areaM2: r.lotAreaTargetM2, isReserve: false }));
+      r.reste.forEach((l) => allLots.push({ ...l, code: `R${String(ri++).padStart(2, "0")}`, isReserve: true }));
       total += r.totalAreaM2;
+      strictValid = strictValid && r.strictValid;
+      errors.push(...r.errors);
     }
-    return { lots: allLots, totalAreaM2: total };
+    return { lots: allLots, totalAreaM2: total, strictValid, errors, lotAreaTargetM2: lotHa * 10_000 };
   }, [data?.m, morcSources, voieResult, lotHa, morcAxis]);
 
 
@@ -175,6 +181,11 @@ function ParcDetail() {
 
   async function saveMorc() {
     if (!morcResult || morcResult.lots.length === 0) return;
+    const normalLots = morcResult.lots.filter((l) => !l.isReserve);
+    if (!morcResult.strictValid || normalLots.some((l) => l.areaM2 !== morcResult.lotAreaTargetM2)) {
+      alert(`Morcellement refusé : chaque lot doit faire exactement ${lotHa} ha.`);
+      return;
+    }
     const items: Lot[] = morcResult.lots.map((l) => ({
       id: crypto.randomUUID(),
       parcelleId: parc?.id ?? m!.id,
@@ -182,6 +193,8 @@ function ParcDetail() {
       code: l.code,
       polygon: l.polygon,
       areaM2: l.areaM2,
+      bornes: l.bornes,
+      isReserve: l.isReserve,
     }));
     await db().lots.where("measurementId").equals(m!.id).delete();
     await db().lots.bulkPut(items);
@@ -407,11 +420,16 @@ function ParcDetail() {
             {showMorc && morcResult && (
               <>
                 <div className="text-xs text-muted-foreground">
-                  Aperçu : {morcResult.lots.length} lots — {formatArea(morcResult.totalAreaM2)} total
+                  Aperçu : {morcResult.lots.filter((l) => !l.isReserve).length} lots stricts de {lotHa} ha — {morcResult.lots.filter((l) => l.isReserve).length} réserve(s) — {formatArea(morcResult.totalAreaM2)} total
                 </div>
+                {!morcResult.strictValid && (
+                  <div className="text-[11px] rounded-md bg-destructive/10 text-destructive p-2">
+                    Découpe bloquée : {morcResult.errors.join(" · ") || `chaque lot doit être exactement ${lotHa} ha`}.
+                  </div>
+                )}
                 <button onClick={saveMorc} disabled={morcResult.lots.length === 0}
                   className="w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">
-                  Valider et créer les {morcResult.lots.length} lots
+                  Valider les lots stricts + réserve
                 </button>
               </>
             )}
@@ -419,7 +437,7 @@ function ParcDetail() {
             {lots.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-muted px-2 py-1.5 text-[11px] font-semibold flex items-center justify-between">
-                  <span>{lots.length} lots créés</span>
+                  <span>{lots.filter((l) => !l.isReserve).length} lots · {lots.filter((l) => l.isReserve).length} réserve(s)</span>
                   <button onClick={deleteLots} className="text-destructive text-[10px] hover:underline">Tout supprimer</button>
                 </div>
                 <div className="max-h-48 overflow-y-auto">
@@ -427,15 +445,15 @@ function ParcDetail() {
                     <thead className="bg-muted/50 sticky top-0">
                       <tr>
                         <th className="text-left p-1.5">Code</th>
-                        <th className="text-right p-1.5">Surface</th>
+                          <th className="text-right p-1.5">Surface</th>
                         <th className="text-left p-1.5">Souscripteur</th>
                       </tr>
                     </thead>
                     <tbody>
                       {lots.map((l) => (
                         <tr key={l.id} className="border-t">
-                          <td className="p-1.5 font-mono">{l.code}</td>
-                          <td className="p-1.5 text-right">{formatArea(l.areaM2)}</td>
+                          <td className="p-1.5 font-mono">{l.code}{l.isReserve ? " · Réserve" : ""}</td>
+                          <td className="p-1.5 text-right">{l.isReserve ? formatArea(l.areaM2) : `${l.areaM2 / 10_000} ha`}</td>
                           <td className="p-1.5">
                             <button onClick={() => assignLot(l.id)}
                               className="text-left text-primary hover:underline truncate max-w-[120px]">

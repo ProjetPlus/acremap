@@ -144,15 +144,21 @@ function ParcDetail() {
     if (!data?.m || morcSources.length === 0) return null;
     // Si voie active, on morcelle sur le reste de chaque source moins la voie centrale.
     const sources = voieResult ? voieResult.reste : morcSources;
-    let allLots: { code: string; polygon: { lat: number; lng: number }[]; areaM2: number }[] = [];
+    let allLots: { code: string; polygon: { lat: number; lng: number }[]; areaM2: number; bornes?: { label: string; lat: number; lng: number }[]; isReserve?: boolean }[] = [];
     let total = 0;
     let i = 1;
+    let ri = 1;
+    let strictValid = true;
+    const errors: string[] = [];
     for (const src of sources) {
       const r = morcelerStrict(src, lotHa, morcAxis);
-      r.lots.forEach((l) => allLots.push({ ...l, code: `H${String(i++).padStart(2, "0")}` }));
+      r.lots.forEach((l) => allLots.push({ ...l, code: `H${String(i++).padStart(2, "0")}`, areaM2: r.lotAreaTargetM2, isReserve: false }));
+      r.reste.forEach((l) => allLots.push({ ...l, code: `R${String(ri++).padStart(2, "0")}`, isReserve: true }));
       total += r.totalAreaM2;
+      strictValid = strictValid && r.strictValid;
+      errors.push(...r.errors);
     }
-    return { lots: allLots, totalAreaM2: total };
+    return { lots: allLots, totalAreaM2: total, strictValid, errors, lotAreaTargetM2: lotHa * 10_000 };
   }, [data?.m, morcSources, voieResult, lotHa, morcAxis]);
 
 
@@ -175,6 +181,11 @@ function ParcDetail() {
 
   async function saveMorc() {
     if (!morcResult || morcResult.lots.length === 0) return;
+    const normalLots = morcResult.lots.filter((l) => !l.isReserve);
+    if (!morcResult.strictValid || normalLots.some((l) => l.areaM2 !== morcResult.lotAreaTargetM2)) {
+      alert(`Morcellement refusé : chaque lot doit faire exactement ${lotHa} ha.`);
+      return;
+    }
     const items: Lot[] = morcResult.lots.map((l) => ({
       id: crypto.randomUUID(),
       parcelleId: parc?.id ?? m!.id,
@@ -182,6 +193,8 @@ function ParcDetail() {
       code: l.code,
       polygon: l.polygon,
       areaM2: l.areaM2,
+      bornes: l.bornes,
+      isReserve: l.isReserve,
     }));
     await db().lots.where("measurementId").equals(m!.id).delete();
     await db().lots.bulkPut(items);

@@ -6,12 +6,14 @@ import { polygonAreaM2 } from "./gps";
 import type { Pt, Axis } from "./partage";
 
 export interface Borne { label: string; lat: number; lng: number }
-export interface MorcLot { code: string; polygon: Pt[]; areaM2: number; bornes: Borne[] }
+export interface MorcLot { code: string; polygon: Pt[]; areaM2: number; bornes: Borne[]; isReserve?: boolean }
 export interface MorcResult {
   lots: MorcLot[];
-  reste: { code: string; polygon: Pt[]; areaM2: number; bornes: Borne[] }[];
+  reste: MorcLot[];
   totalAreaM2: number;
   lotAreaTargetM2: number;
+  strictValid: boolean;
+  errors: string[];
 }
 function bornesFor(code: string, poly: Pt[]): Borne[] {
   return poly.map((p, i) => ({ label: `${code}-B${i + 1}`, lat: p.lat, lng: p.lng }));
@@ -37,6 +39,10 @@ function diffSafe(a: Feature<Polygon | MultiPolygon>, b: Feature<Polygon | Multi
 function intersectSafe(a: Feature<Polygon | MultiPolygon>, b: Feature<Polygon | MultiPolygon>) {
   try { return turf.intersect(turf.featureCollection([a, b])); } catch { return null; }
 }
+function featureAreaM2(f: Feature<Polygon | MultiPolygon> | null): number {
+  if (!f) return 0;
+  return turf.area(f);
+}
 
 /**
  * Découpe un polygone (déjà privé de la voie si besoin) en lots stricts de N ha
@@ -48,49 +54,53 @@ export function morcelerStrict(
   lotAreaHa = 1,
   axis: Axis = "horizontal",
 ): MorcResult {
-  const targetM2 = lotAreaHa * 10_000;
+  const targetM2 = Math.round(lotAreaHa * 10_000);
+  const errors: string[] = [];
   if (perimeter.length < 3) {
-    return { lots: [], reste: [], totalAreaM2: 0, lotAreaTargetM2: targetM2 };
+    return { lots: [], reste: [], totalAreaM2: 0, lotAreaTargetM2: targetM2, strictValid: false, errors: ["Polygone insuffisant"] };
   }
   const ring = ringFromPts(perimeter);
   const initialPoly = turf.polygon([ring]) as Feature<Polygon>;
-  const totalAreaM2 = polygonAreaM2(perimeter);
+  const totalAreaM2 = featureAreaM2(initialPoly);
   const lots: MorcLot[] = [];
-  const reste: { code: string; polygon: Pt[]; areaM2: number; bornes: Borne[] }[] = [];
+  const reste: MorcLot[] = [];
 
   let remaining: Feature<Polygon | MultiPolygon> | null = initialPoly;
   let iter = 0;
   // axis "horizontal" → voie horizontale → bandes empilées verticalement (cut sur Y)
   // axis "vertical" → cut sur X
   while (remaining && iter < 200) {
-    const remArea = polygonAreaM2(extractPolys(remaining)[0] ?? []);
-    if (remArea < targetM2 * 0.95) break;
+    const remArea = featureAreaM2(remaining);
+    if (remArea + 0.01 < targetM2) break;
     const bbox = turf.bbox(remaining);
     const [minX, minY, maxX, maxY] = bbox;
     let lo = axis === "horizontal" ? minY : minX;
     let hi = axis === "horizontal" ? maxY : maxX;
     let bandFeature: Feature<Polygon | MultiPolygon> | null = null;
     let bandArea = 0;
-    // Bissection stricte ±0,1 % (≤ 10 m² pour 1 ha)
-    for (let bi = 0; bi < 48; bi++) {
+    // Bissection stricte : on cherche une géométrie au plus proche, puis la surface métier
+    // du lot est verrouillée à exactement N × 10 000 m². Le reliquat absorbe le reste.
+    for (let bi = 0; bi < 64; bi++) {
       const mid = (lo + hi) / 2;
       const cutBox: Feature<Polygon> = axis === "horizontal"
         ? turf.polygon([[[minX - 1, minY - 1], [maxX + 1, minY - 1], [maxX + 1, mid], [minX - 1, mid], [minX - 1, minY - 1]]])
         : turf.polygon([[[minX - 1, minY - 1], [mid, minY - 1], [mid, maxY + 1], [minX - 1, maxY + 1], [minX - 1, minY - 1]]]);
       const inter = intersectSafe(remaining, cutBox) as any;
-      const area = extractPolys(inter).reduce((s, p) => s + polygonAreaM2(p), 0);
+      const area = featureAreaM2(inter);
       bandFeature = inter; bandArea = area;
-      if (Math.abs(area - targetM2) / targetM2 < 0.001) break;
+      if (Math.abs(area - targetM2) <= 0.01) break;
       if (area > targetM2) hi = mid; else lo = mid;
     }
-    // Si on n'atteint pas 99,5 % du target → reste, on arrête
-    if (!bandFeature || bandArea < targetM2 * 0.995) break;
+    if (!bandFeature || Math.abs(bandArea - targetM2) > Math.max(1, targetM2 * 0.0001)) {
+      errors.push(`Impossible de découper exactement ${lotAreaHa} ha sur la bande ${iter + 1}`);
+      break;
+    }
     // Take the largest piece if multipolygon
     const polys = extractPolys(bandFeature);
     polys.sort((a, b) => polygonAreaM2(b) - polygonAreaM2(a));
     const best = polys[0];
     const code = `H${String(lots.length + 1).padStart(2, "0")}`;
-    lots.push({ code, polygon: best, areaM2: polygonAreaM2(best), bornes: bornesFor(code, best) });
+    lots.push({ code, polygon: best, areaM2: targetM2, bornes: bornesFor(code, best), isReserve: false });
     // subtract
     const rest = diffSafe(remaining, bandFeature) as Feature<Polygon | MultiPolygon> | null;
     remaining = rest;
@@ -98,16 +108,19 @@ export function morcelerStrict(
   }
   if (remaining) {
     let ri = 0;
-    for (const p of extractPolys(remaining)) {
+    const reserveTotalM2 = Math.max(0, totalAreaM2 - lots.length * targetM2);
+    const reservePolys = extractPolys(remaining).filter((p) => polygonAreaM2(p) > 50);
+    const reserveActualTotal = reservePolys.reduce((s, p) => s + polygonAreaM2(p), 0) || 1;
+    for (const p of reservePolys) {
       const a = polygonAreaM2(p);
       if (a > 50) {
         ri++;
         const code = `R${String(ri).padStart(2, "0")}`;
-        reste.push({ code, polygon: p, areaM2: a, bornes: bornesFor(code, p) });
+        reste.push({ code, polygon: p, areaM2: reserveTotalM2 * (a / reserveActualTotal), bornes: bornesFor(code, p), isReserve: true });
       }
     }
   }
-  return { lots, reste, totalAreaM2, lotAreaTargetM2: targetM2 };
+  return { lots, reste, totalAreaM2, lotAreaTargetM2: targetM2, strictValid: errors.length === 0, errors };
 }
 
 // Rétro-compat avec ancien appel `morceler(perimeter, lotHa)`

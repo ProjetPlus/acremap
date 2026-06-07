@@ -61,7 +61,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     : `MES-${m.id.slice(0, 8).toUpperCase()}`;
 
   // ============ EN-TÊTE ============
-  doc.setFillColor(...C.headerGreen);
+  fill(doc, C.headerGreen);
   doc.rect(0, 0, W, 22, "F");
   try { doc.addImage(logo, "JPEG", M, 3, 16, 16); } catch { /* ignore */ }
   doc.setTextColor(255);
@@ -77,7 +77,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
   const refBoxW = 70, refBoxH = 12;
   doc.setFillColor(255); doc.setDrawColor(255);
   doc.roundedRect(W - M - refBoxW, 5, refBoxW, refBoxH, 1.5, 1.5, "F");
-  doc.setTextColor(...C.headerGreen);
+  ink(doc, C.headerGreen);
   doc.setFont("helvetica", "bold"); doc.setFontSize(11);
   doc.text(reference, W - M - refBoxW / 2, 13, { align: "center" });
   doc.setTextColor(0);
@@ -143,14 +143,14 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
   doc.rect(lx, ly, colLeftW, locH, "FD");
   // Mini cible
   const mlx = lx + colLeftW / 2, mly = ly + locH / 2 - 2;
-  doc.setDrawColor(...C.parcelGreen); doc.setLineWidth(0.4);
+  stroke(doc, C.parcelGreen); doc.setLineWidth(0.4);
   doc.circle(mlx, mly, 1.6, "S");
   doc.setFillColor(220, 60, 50); doc.circle(mlx, mly, 0.9, "F");
   doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(80);
   doc.text("Parcelle", mlx + 2.4, mly + 0.5);
   doc.setFontSize(7); doc.setTextColor(40);
   doc.text(sp ? `${sp.code} — ${sp.name}` : "—", lx + colLeftW / 2, ly + locH - 5, { align: "center" });
-  doc.setFontSize(6); doc.setTextColor(...C.textMuted);
+  doc.setFontSize(6); ink(doc, C.textMuted);
   doc.text(sp ? `Département de ${sp.departement}` : "", lx + colLeftW / 2, ly + locH - 2.5, { align: "center" });
   doc.text(sp ? `Région du ${sp.region}` : "", lx + colLeftW / 2, ly + locH - 0.6, { align: "center" });
   ly += locH + 4;
@@ -165,7 +165,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     `Chaque lot hectare fait l'objet d'un plan polygonal et d'un rapport technique individuel.`,
   ];
   for (const n of notes) {
-    doc.setFillColor(...C.parcelGreen); doc.circle(lx + 1.5, ly - 0.5, 0.7, "F");
+    fill(doc, C.parcelGreen); doc.circle(lx + 1.5, ly - 0.5, 0.7, "F");
     const lines = doc.splitTextToSize(n, colLeftW - 5);
     doc.text(lines, lx + 4, ly);
     ly += lines.length * 2.8 + 1.5;
@@ -178,12 +178,12 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
   doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.setTextColor(40);
   doc.text(`Dressé par : ${operatorName || "CNEFEHB"}`, lx + 1, ly);
   ly += 3.5;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(...C.textMuted);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(6); ink(doc, C.textMuted);
   doc.text("Cabinet de Négoce et d'Expertise Foncière", lx + 1, ly); ly += 2.6;
   doc.text("Environnementale Hydraulique et Bâtiment", lx + 1, ly); ly += 2.6;
   doc.text("Géomètre-Expert", lx + 1, ly); ly += 4;
   doc.setDrawColor(200); doc.line(lx + 1, ly, lx + colLeftW - 1, ly);
-  doc.setFontSize(5.5); doc.setTextColor(...C.textMuted);
+  doc.setFontSize(5.5); ink(doc, C.textMuted);
   doc.text("Cachet & Signature", lx + colLeftW / 2, ly + 2, { align: "center" });
 
   // ============ CENTRE — PLAN 2D ============
@@ -223,7 +223,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     const gridStep = niceStep(Math.max(dx, dy) / 6);
     const gx0 = Math.ceil(minX / gridStep) * gridStep;
     const gy0 = Math.ceil(minY / gridStep) * gridStep;
-    doc.setDrawColor(...C.gridLight); doc.setLineWidth(0.1);
+    stroke(doc, C.gridLight); doc.setLineWidth(0.1);
     doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); doc.setTextColor(90);
     for (let gx = gx0; gx <= maxX; gx += gridStep) {
       const [px] = project(gx, minY);
@@ -244,7 +244,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
       if (l.polygon.length < 3) return;
       const pts = l.polygon.map((p) => project(...(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number])));
       doc.setFillColor(...(l.isReserve ? [248, 232, 200] as const : C.lotFill));
-      doc.setDrawColor(...C.lotStroke);
+      stroke(doc, C.lotStroke);
       doc.setLineDashPattern([0.8, 0.8], 0);
       drawPoly(doc, pts, "FD");
       doc.setLineDashPattern([], 0);
@@ -257,7 +257,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     });
 
     // Piste d'accès centrale
-    doc.setFillColor(...C.roadFill); doc.setDrawColor(...C.roadStroke); doc.setLineWidth(0.25);
+    fill(doc, C.roadFill); stroke(doc, C.roadStroke); doc.setLineWidth(0.25);
     for (const v of voie) {
       if (v.length < 3) continue;
       const pts = v.map((p) => project(...(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number])));
@@ -265,14 +265,14 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     }
 
     // Contour parcelle (vert vif)
-    doc.setDrawColor(...C.parcelGreen); doc.setLineWidth(0.9); doc.setFillColor(255);
+    stroke(doc, C.parcelGreen); doc.setLineWidth(0.9); doc.setFillColor(255);
     const parcPts = parcUtm.map(([x, y2]) => project(x, y2));
     drawPoly(doc, parcPts, "S");
 
     // Bornes A1..An
     doc.setFontSize(6); doc.setFont("helvetica", "bold");
     parcPts.forEach(([x, y2], i) => {
-      doc.setFillColor(...C.borneFill); doc.setDrawColor(...C.borneStroke); doc.setLineWidth(0.3);
+      fill(doc, C.borneFill); stroke(doc, C.borneStroke); doc.setLineWidth(0.3);
       doc.circle(x, y2, 1.1, "FD");
       doc.setTextColor(20);
       doc.text(`A${i + 1}`, x + 1.6, y2 + 2.4);
@@ -338,7 +338,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
   // REMARQUES IMPORTANTES (bas)
   if (ry < bottom - 8) {
     doc.setDrawColor(180); doc.line(rx, ry, rx + colRightW, ry); ry += 3;
-    doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...C.headerGreen);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7); ink(doc, C.headerGreen);
     doc.text("REMARQUES IMPORTANTES", rx + colRightW / 2, ry, { align: "center" });
     ry += 3.5;
     doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(40);
@@ -359,7 +359,7 @@ function conventionLabel(s?: string | null): string {
 }
 
 function sectionTitle(doc: jsPDF, x: number, y: number, w: number, title: string) {
-  doc.setFillColor(...C.sectionDark);
+  fill(doc, C.sectionDark);
   doc.rect(x, y, w, 5, "F");
   doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5);
   doc.text(title, x + w / 2, y + 3.4, { align: "center" });
@@ -386,7 +386,7 @@ function drawTwoColTable(doc: jsPDF, x: number, y: number, w: number, headers: [
   const c1 = w * 0.62;
   const rowH = 5;
   // header
-  doc.setFillColor(...C.tableHeader); doc.rect(x, y, w, rowH, "F");
+  fill(doc, C.tableHeader); doc.rect(x, y, w, rowH, "F");
   doc.setDrawColor(180); doc.setLineWidth(0.15);
   doc.setFont("helvetica", "bold"); doc.setFontSize(6.8); doc.setTextColor(20);
   doc.text(headers[0], x + 1.5, y + 3.4);
@@ -408,7 +408,7 @@ function drawTwoColTable(doc: jsPDF, x: number, y: number, w: number, headers: [
 function drawTableRow(doc: jsPDF, x: number, y: number, widths: number[], cells: string[], header: boolean, alt = false): number {
   const rowH = header ? 5 : 4.4;
   const totalW = widths.reduce((a, b) => a + b, 0);
-  if (header) { doc.setFillColor(...C.tableHeader); doc.rect(x, y, totalW, rowH, "F"); }
+  if (header) { fill(doc, C.tableHeader); doc.rect(x, y, totalW, rowH, "F"); }
   else if (alt) { doc.setFillColor(248, 250, 245); doc.rect(x, y, totalW, rowH, "F"); }
   doc.setFont("helvetica", header ? "bold" : "normal"); doc.setFontSize(header ? 6.5 : 6.5);
   doc.setTextColor(header ? 20 : 30);

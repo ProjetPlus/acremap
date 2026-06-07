@@ -17,6 +17,7 @@ import { Route as AppValidationRouteImport } from './routes/app.validation'
 import { Route as AppUsersRouteImport } from './routes/app.users'
 import { Route as AppMeasureRouteImport } from './routes/app.measure'
 import { Route as AppHierarchieRouteImport } from './routes/app.hierarchie'
+import { Route as AppDebugRouteImport } from './routes/app.debug'
 import { Route as AppParcellesIndexRouteImport } from './routes/app.parcelles.index'
 import { Route as AppParcellesNewRouteImport } from './routes/app.parcelles.new'
 import { Route as AppParcellesIdRouteImport } from './routes/app.parcelles.$id'
@@ -61,6 +62,11 @@ const AppHierarchieRoute = AppHierarchieRouteImport.update({
   path: '/hierarchie',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDebugRoute = AppDebugRouteImport.update({
+  id: '/debug',
+  path: '/debug',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppParcellesIndexRoute = AppParcellesIndexRouteImport.update({
   id: '/parcelles/',
   path: '/parcelles/',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/measure': typeof AppMeasureRoute
   '/app/users': typeof AppUsersRoute
@@ -93,6 +100,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/measure': typeof AppMeasureRoute
   '/app/users': typeof AppUsersRoute
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/measure': typeof AppMeasureRoute
   '/app/users': typeof AppUsersRoute
@@ -122,6 +131,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/login'
+    | '/app/debug'
     | '/app/hierarchie'
     | '/app/measure'
     | '/app/users'
@@ -134,6 +144,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/app/debug'
     | '/app/hierarchie'
     | '/app/measure'
     | '/app/users'
@@ -147,6 +158,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/login'
+    | '/app/debug'
     | '/app/hierarchie'
     | '/app/measure'
     | '/app/users'
@@ -221,6 +233,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHierarchieRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/debug': {
+      id: '/app/debug'
+      path: '/debug'
+      fullPath: '/app/debug'
+      preLoaderRoute: typeof AppDebugRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/parcelles/': {
       id: '/app/parcelles/'
       path: '/parcelles'
@@ -246,6 +265,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppDebugRoute: typeof AppDebugRoute
   AppHierarchieRoute: typeof AppHierarchieRoute
   AppMeasureRoute: typeof AppMeasureRoute
   AppUsersRoute: typeof AppUsersRoute
@@ -257,6 +277,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppDebugRoute: AppDebugRoute,
   AppHierarchieRoute: AppHierarchieRoute,
   AppMeasureRoute: AppMeasureRoute,
   AppUsersRoute: AppUsersRoute,
@@ -277,3 +298,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

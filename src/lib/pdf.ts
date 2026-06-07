@@ -19,21 +19,27 @@ interface BuildArgs {
   format?: "a4" | "a3" | "a2" | "a1";
 }
 
+type RGB = readonly [number, number, number];
+const fill = (doc: jsPDF, c: RGB) => doc.setFillColor(c[0], c[1], c[2]);
+const stroke = (doc: jsPDF, c: RGB) => doc.setDrawColor(c[0], c[1], c[2]);
+const ink = (doc: jsPDF, c: RGB | number) =>
+  typeof c === "number" ? doc.setTextColor(c, c, c) : doc.setTextColor(c[0], c[1], c[2]);
+
 // ----- Palette du modèle -----
-const C = {
-  headerGreen: [58, 122, 42] as const,
-  sectionDark: [45, 90, 35] as const,
-  parcelGreen: [76, 175, 80] as const,
-  lotFill: [212, 232, 184] as const,
-  lotStroke: [110, 150, 80] as const,
-  roadFill: [196, 168, 120] as const,
-  roadStroke: [140, 110, 70] as const,
-  borneFill: [255, 255, 255] as const,
-  borneStroke: [40, 40, 40] as const,
-  gridLight: [220, 220, 220] as const,
-  rowAlt: [245, 245, 245] as const,
-  tableHeader: [232, 240, 226] as const,
-  textMuted: [110, 110, 110] as const,
+const C: Record<string, RGB> = {
+  headerGreen: [58, 122, 42],
+  sectionDark: [45, 90, 35],
+  parcelGreen: [76, 175, 80],
+  lotFill: [212, 232, 184],
+  lotStroke: [110, 150, 80],
+  roadFill: [196, 168, 120],
+  roadStroke: [140, 110, 70],
+  borneFill: [255, 255, 255],
+  borneStroke: [40, 40, 40],
+  gridLight: [220, 220, 220],
+  rowAlt: [245, 245, 245],
+  tableHeader: [232, 240, 226],
+  textMuted: [110, 110, 110],
 };
 
 function utmZone(lng: number) { return Math.floor((lng + 180) / 6) + 1; }

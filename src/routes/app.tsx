@@ -74,6 +74,10 @@ function AppLayout() {
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm bg-accent/20 text-sidebar-foreground border border-accent/30 mt-3">
             <Icon name="crosshair" /><span className="font-semibold">+ Nouveau levé GPS</span>
           </Link>
+          <Link to="/app/debug"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent mt-2">
+            <span>🩺</span><span>Diagnostic base</span>
+          </Link>
         </nav>
         <div className="p-3 border-t border-sidebar-border space-y-2">
           {notifPerm !== "granted" && notifPerm !== "unsupported" && (

@@ -80,7 +80,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
   ink(doc, C.headerGreen);
   doc.setFont("helvetica", "bold"); doc.setFontSize(11);
   doc.text(reference, W - M - refBoxW / 2, 13, { align: "center" });
-  doc.setTextColor(0);
+  doc.setTextColor(0, 0, 0);
 
   // ============ LAYOUT 3 COLONNES ============
   const top = 26;
@@ -139,16 +139,16 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
   sectionTitle(doc, lx, ly, colLeftW, "LOCALISATION");
   ly += 6;
   const locH = 28;
-  doc.setDrawColor(180); doc.setFillColor(248, 248, 245);
+  doc.setDrawColor(180, 180, 180); doc.setFillColor(248, 248, 245);
   doc.rect(lx, ly, colLeftW, locH, "FD");
   // Mini cible
   const mlx = lx + colLeftW / 2, mly = ly + locH / 2 - 2;
   stroke(doc, C.parcelGreen); doc.setLineWidth(0.4);
   doc.circle(mlx, mly, 1.6, "S");
   doc.setFillColor(220, 60, 50); doc.circle(mlx, mly, 0.9, "F");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(80);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(80, 80, 80);
   doc.text("Parcelle", mlx + 2.4, mly + 0.5);
-  doc.setFontSize(7); doc.setTextColor(40);
+  doc.setFontSize(7); doc.setTextColor(40, 40, 40);
   doc.text(sp ? `${sp.code} — ${sp.name}` : "—", lx + colLeftW / 2, ly + locH - 5, { align: "center" });
   doc.setFontSize(6); ink(doc, C.textMuted);
   doc.text(sp ? `Département de ${sp.departement}` : "", lx + colLeftW / 2, ly + locH - 2.5, { align: "center" });
@@ -158,7 +158,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
   // Notes
   sectionTitle(doc, lx, ly, colLeftW, "NOTES");
   ly += 6;
-  doc.setTextColor(40); doc.setFontSize(6.5); doc.setFont("helvetica", "normal");
+  doc.setTextColor(40, 40, 40); doc.setFontSize(6.5); doc.setFont("helvetica", "normal");
   const notes = [
     "Les superficies sont approximatives et pourront être ajustées après bornage définitif.",
     "Les limites sont issues d'un levé GPS et matérialisées sur le terrain par des bornes.",
@@ -173,21 +173,21 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
 
   // Dressé par
   ly = Math.max(ly + 2, bottom - 26);
-  doc.setDrawColor(180); doc.line(lx, ly, lx + colLeftW, ly);
+  doc.setDrawColor(180, 180, 180); doc.line(lx, ly, lx + colLeftW, ly);
   ly += 4;
-  doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.setTextColor(40);
+  doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.setTextColor(40, 40, 40);
   doc.text(`Dressé par : ${operatorName || "CNEFEHB"}`, lx + 1, ly);
   ly += 3.5;
   doc.setFont("helvetica", "normal"); doc.setFontSize(6); ink(doc, C.textMuted);
   doc.text("Cabinet de Négoce et d'Expertise Foncière", lx + 1, ly); ly += 2.6;
   doc.text("Environnementale Hydraulique et Bâtiment", lx + 1, ly); ly += 2.6;
   doc.text("Géomètre-Expert", lx + 1, ly); ly += 4;
-  doc.setDrawColor(200); doc.line(lx + 1, ly, lx + colLeftW - 1, ly);
+  doc.setDrawColor(200, 200, 200); doc.line(lx + 1, ly, lx + colLeftW - 1, ly);
   doc.setFontSize(5.5); ink(doc, C.textMuted);
   doc.text("Cachet & Signature", lx + colLeftW / 2, ly + 2, { align: "center" });
 
   // ============ CENTRE — PLAN 2D ============
-  doc.setDrawColor(160); doc.setLineWidth(0.3);
+  doc.setDrawColor(160, 160, 160); doc.setLineWidth(0.3);
   doc.rect(planX, planY, planW, planH);
 
   let utmZ = 30, north = true;
@@ -224,7 +224,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     const gx0 = Math.ceil(minX / gridStep) * gridStep;
     const gy0 = Math.ceil(minY / gridStep) * gridStep;
     stroke(doc, C.gridLight); doc.setLineWidth(0.1);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); doc.setTextColor(90);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); doc.setTextColor(90, 90, 90);
     for (let gx = gx0; gx <= maxX; gx += gridStep) {
       const [px] = project(gx, minY);
       doc.line(px, planY + 4, px, planY + planH - 4);
@@ -250,9 +250,9 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
       doc.setLineDashPattern([], 0);
       const cx2 = pts.reduce((s, p) => s + p[0], 0) / pts.length;
       const cy2 = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-      doc.setTextColor(40); doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "bold"); doc.setFontSize(8);
       doc.text(l.code, cx2, cy2 - 0.5, { align: "center" });
-      doc.setFontSize(6); doc.setFont("helvetica", "normal"); doc.setTextColor(60);
+      doc.setFontSize(6); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
       doc.text(`${(l.areaM2 / 10000).toFixed(2)} ha`.replace(".", ","), cx2, cy2 + 2.2, { align: "center" });
     });
 
@@ -274,7 +274,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     parcPts.forEach(([x, y2], i) => {
       fill(doc, C.borneFill); stroke(doc, C.borneStroke); doc.setLineWidth(0.3);
       doc.circle(x, y2, 1.1, "FD");
-      doc.setTextColor(20);
+      doc.setTextColor(20, 20, 20);
       doc.text(`A${i + 1}`, x + 1.6, y2 + 2.4);
     });
 
@@ -284,7 +284,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     // Échelle graphique (bas-centre)
     drawScaleBar(doc, planX + planW / 2 - 28, planY + planH - 7, scale);
   } else {
-    doc.setFontSize(10); doc.setTextColor(150);
+    doc.setFontSize(10); doc.setTextColor(150, 150, 150);
     doc.text("Plan indisponible (moins de 3 points).", planX + planW / 2, planY + planH / 2, { align: "center" });
   }
 
@@ -295,7 +295,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
   // LÉGENDE
   sectionTitle(doc, rx, ry, colRightW, "LÉGENDE");
   ry += 7;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(40);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(40, 40, 40);
   legendLine(doc, rx + 1, ry, "line", C.parcelGreen, "Limite de la parcelle"); ry += 4.5;
   legendLine(doc, rx + 1, ry, "dashed", C.lotStroke, `Limite des lots (${targetHa} ha)`); ry += 4.5;
   legendLine(doc, rx + 1, ry, "fill", C.roadFill, "Piste d'accès centrale (6 m de large)"); ry += 4.5;
@@ -337,11 +337,11 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
 
   // REMARQUES IMPORTANTES (bas)
   if (ry < bottom - 8) {
-    doc.setDrawColor(180); doc.line(rx, ry, rx + colRightW, ry); ry += 3;
+    doc.setDrawColor(180, 180, 180); doc.line(rx, ry, rx + colRightW, ry); ry += 3;
     doc.setFont("helvetica", "bold"); doc.setFontSize(7); ink(doc, C.headerGreen);
     doc.text("REMARQUES IMPORTANTES", rx + colRightW / 2, ry, { align: "center" });
     ry += 3.5;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(40);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(40, 40, 40);
     const rem = "Ce plan est établi à partir d'un levé GPS. Le bornage contradictoire et la matérialisation physique des limites seront effectués sur le terrain avant signature des conventions.";
     const lines = doc.splitTextToSize(rem, colRightW - 2);
     doc.text(lines, rx + 1, ry);
@@ -363,17 +363,17 @@ function sectionTitle(doc: jsPDF, x: number, y: number, w: number, title: string
   doc.rect(x, y, w, 5, "F");
   doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5);
   doc.text(title, x + w / 2, y + 3.4, { align: "center" });
-  doc.setTextColor(0);
+  doc.setTextColor(0, 0, 0);
 }
 
 function drawKVTable(doc: jsPDF, x: number, y: number, w: number, rows: [string, string][], rowH = 4.5): number {
-  doc.setDrawColor(220); doc.setLineWidth(0.1);
+  doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.1);
   doc.setFont("helvetica", "normal"); doc.setFontSize(6.8);
   const keyW = 30;
   rows.forEach(([k, v], i) => {
     if (i % 2 === 0) { doc.setFillColor(250, 250, 248); doc.rect(x, y + i * rowH, w, rowH, "F"); }
-    doc.setTextColor(80); doc.text(k, x + 1, y + i * rowH + rowH / 2 + 1);
-    doc.setTextColor(20); doc.text(":", x + keyW - 1, y + i * rowH + rowH / 2 + 1);
+    doc.setTextColor(80, 80, 80); doc.text(k, x + 1, y + i * rowH + rowH / 2 + 1);
+    doc.setTextColor(20, 20, 20); doc.text(":", x + keyW - 1, y + i * rowH + rowH / 2 + 1);
     doc.setFont("helvetica", "bold");
     doc.text(String(v), x + keyW + 1, y + i * rowH + rowH / 2 + 1, { maxWidth: w - keyW - 2 });
     doc.setFont("helvetica", "normal");
@@ -387,20 +387,20 @@ function drawTwoColTable(doc: jsPDF, x: number, y: number, w: number, headers: [
   const rowH = 5;
   // header
   fill(doc, C.tableHeader); doc.rect(x, y, w, rowH, "F");
-  doc.setDrawColor(180); doc.setLineWidth(0.15);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(6.8); doc.setTextColor(20);
+  doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.15);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(6.8); doc.setTextColor(20, 20, 20);
   doc.text(headers[0], x + 1.5, y + 3.4);
   doc.text(headers[1], x + c1 + 1.5, y + 3.4);
   y += rowH;
   doc.setFont("helvetica", "normal");
   rows.forEach(([a, b], i) => {
     if (i % 2 === 1) { doc.setFillColor(248, 250, 245); doc.rect(x, y, w, rowH, "F"); }
-    doc.setTextColor(30); doc.text(a, x + 1.5, y + 3.4);
+    doc.setTextColor(30, 30, 30); doc.text(a, x + 1.5, y + 3.4);
     doc.setFont("helvetica", "bold"); doc.text(b, x + c1 + 1.5, y + 3.4);
     doc.setFont("helvetica", "normal");
     y += rowH;
   });
-  doc.setDrawColor(180); doc.rect(x, y - rows.length * rowH - rowH, w, (rows.length + 1) * rowH, "S");
+  doc.setDrawColor(180, 180, 180); doc.rect(x, y - rows.length * rowH - rowH, w, (rows.length + 1) * rowH, "S");
   doc.line(x + c1, y - rows.length * rowH - rowH, x + c1, y);
   return y;
 }
@@ -417,7 +417,7 @@ function drawTableRow(doc: jsPDF, x: number, y: number, widths: number[], cells:
     doc.text(c, cx + widths[i] / 2, y + rowH / 2 + 1.2, { align: "center" });
     cx += widths[i];
   });
-  doc.setDrawColor(190); doc.setLineWidth(0.1);
+  doc.setDrawColor(190, 190, 190); doc.setLineWidth(0.1);
   doc.rect(x, y, totalW, rowH, "S");
   // vertical separators
   let vx = x;
@@ -445,17 +445,17 @@ function legendLine(doc: jsPDF, x: number, y: number, kind: "line" | "dashed" | 
     doc.line(x, y - 0.5, x + 8, y - 0.5);
     doc.triangle(x + 8, y - 2, x + 8, y + 1, x + 10.5, y - 0.5, "F");
   }
-  doc.setTextColor(40); doc.setFontSize(7); doc.setFont("helvetica", "normal");
+  doc.setTextColor(40, 40, 40); doc.setFontSize(7); doc.setFont("helvetica", "normal");
   doc.text(label, x + 13, y);
 }
 
 function drawNorth(doc: jsPDF, x: number, y: number) {
-  doc.setFillColor(255, 255, 255); doc.setDrawColor(80); doc.setLineWidth(0.3);
+  doc.setFillColor(255, 255, 255); doc.setDrawColor(80, 80, 80); doc.setLineWidth(0.3);
   doc.circle(x, y, 5, "FD");
   doc.setFillColor(20, 20, 20);
   doc.triangle(x, y - 4, x - 2, y + 1, x + 2, y + 1, "F");
-  doc.setFillColor(180); doc.triangle(x, y + 4, x - 2, y - 1, x + 2, y - 1, "F");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(20);
+  doc.setFillColor(180, 180, 180); doc.triangle(x, y + 4, x - 2, y - 1, x + 2, y - 1, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(20, 20, 20);
   doc.text("N", x, y - 5.6, { align: "center" });
 }
 
@@ -466,14 +466,14 @@ function drawScaleBar(doc: jsPDF, x: number, y: number, scale: number) {
   const step = niceStep(targetM / 5);
   const ticks = 5;
   const totalMm = ticks * step * scale;
-  doc.setDrawColor(20); doc.setLineWidth(0.4); doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(20, 20, 20); doc.setLineWidth(0.4); doc.setFillColor(255, 255, 255);
   for (let i = 0; i < ticks; i++) {
     const x0 = x + i * (totalMm / ticks);
     const x1 = x + (i + 1) * (totalMm / ticks);
     doc.setFillColor(i % 2 === 0 ? 20 : 255, i % 2 === 0 ? 20 : 255, i % 2 === 0 ? 20 : 255);
     doc.rect(x0, y, x1 - x0, 1.4, "FD");
   }
-  doc.setFontSize(5.5); doc.setTextColor(30); doc.setFont("helvetica", "normal");
+  doc.setFontSize(5.5); doc.setTextColor(30, 30, 30); doc.setFont("helvetica", "normal");
   for (let i = 0; i <= ticks; i++) {
     const xi = x + i * (totalMm / ticks);
     doc.text(`${(i * step).toFixed(0)}`, xi, y - 0.8, { align: "center" });

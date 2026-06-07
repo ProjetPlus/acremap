@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, isBrowser } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
@@ -11,14 +12,23 @@ export const Route = createFileRoute("/app/")({
 
 function Dashboard() {
   const user = useAuth((s) => s.user);
+  const [dbError, setDbError] = useState<string | null>(null);
   const stats = useLiveQuery(async () => {
     if (!isBrowser()) return null;
-    const d = db();
-    const [sps, doms, parcs, mes] = await Promise.all([d.sps.count(), d.domaines.count(), d.parcelles.count(), d.measurements.toArray()]);
-    const submitted = mes.filter((m) => m.status === "submitted").length;
-    const validated = mes.filter((m) => m.status === "validated");
-    const totalHa = validated.reduce((a, m) => a + m.areaM2, 0);
-    return { sps, doms, parcs, totalMes: mes.length, submitted, validatedHa: totalHa, recent: mes.sort((a, b) => b.createdAt - a.createdAt).slice(0, 5) };
+    try {
+      const d = db();
+      await d.open();
+      const [sps, doms, parcs, mes] = await Promise.all([d.sps.count(), d.domaines.count(), d.parcelles.count(), d.measurements.toArray()]);
+      const submitted = mes.filter((m) => m.status === "submitted").length;
+      const validated = mes.filter((m) => m.status === "validated");
+      const totalHa = validated.reduce((a, m) => a + m.areaM2, 0);
+      setDbError(null);
+      return { sps, doms, parcs, totalMes: mes.length, submitted, validatedHa: totalHa, recent: mes.sort((a, b) => b.createdAt - a.createdAt).slice(0, 5) };
+    } catch (e: unknown) {
+      const err = e as { name?: string; message?: string };
+      setDbError(`${err.name ?? "Erreur"}: ${err.message ?? String(e)}`);
+      return null;
+    }
   }, []);
 
   return (

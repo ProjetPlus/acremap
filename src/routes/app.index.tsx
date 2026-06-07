@@ -38,6 +38,16 @@ function Dashboard() {
         <p className="text-muted-foreground text-sm">Votre vue d'ensemble AgriCapital — {new Date().toLocaleDateString("fr-FR", { dateStyle: "full" })}</p>
       </div>
 
+      {dbError && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-sm">
+          <div className="font-semibold text-destructive">⚠ Base locale inaccessible</div>
+          <div className="text-xs mt-1 text-muted-foreground break-all">{dbError}</div>
+          <Link to="/app/debug" className="inline-block mt-2 text-xs text-primary underline">Ouvrir le diagnostic →</Link>
+        </div>
+      )}
+
+
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         <Stat label="Sous-Préfectures" value={stats?.sps ?? 0} hint="SP enregistrées" tone="primary" />
         <Stat label="Domaines" value={stats?.doms ?? 0} hint="DOM créés" tone="primary" />

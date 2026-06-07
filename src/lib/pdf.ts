@@ -64,7 +64,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
   fill(doc, C.headerGreen);
   doc.rect(0, 0, W, 22, "F");
   try { doc.addImage(logo, "JPEG", M, 3, 16, 16); } catch { /* ignore */ }
-  doc.setTextColor(255);
+  doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold"); doc.setFontSize(11);
   doc.text(organisation.toUpperCase(), M + 20, 9);
   doc.setFont("helvetica", "normal"); doc.setFontSize(8);
@@ -75,7 +75,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
 
   // Boîte référence à droite
   const refBoxW = 70, refBoxH = 12;
-  doc.setFillColor(255); doc.setDrawColor(255);
+  doc.setFillColor(255, 255, 255); doc.setDrawColor(255, 255, 255);
   doc.roundedRect(W - M - refBoxW, 5, refBoxW, refBoxH, 1.5, 1.5, "F");
   ink(doc, C.headerGreen);
   doc.setFont("helvetica", "bold"); doc.setFontSize(11);
@@ -265,7 +265,7 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
     }
 
     // Contour parcelle (vert vif)
-    stroke(doc, C.parcelGreen); doc.setLineWidth(0.9); doc.setFillColor(255);
+    stroke(doc, C.parcelGreen); doc.setLineWidth(0.9); doc.setFillColor(255, 255, 255);
     const parcPts = parcUtm.map(([x, y2]) => project(x, y2));
     drawPoly(doc, parcPts, "S");
 
@@ -361,7 +361,7 @@ function conventionLabel(s?: string | null): string {
 function sectionTitle(doc: jsPDF, x: number, y: number, w: number, title: string) {
   fill(doc, C.sectionDark);
   doc.rect(x, y, w, 5, "F");
-  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5);
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5);
   doc.text(title, x + w / 2, y + 3.4, { align: "center" });
   doc.setTextColor(0);
 }
@@ -438,7 +438,7 @@ function legendLine(doc: jsPDF, x: number, y: number, kind: "line" | "dashed" | 
     doc.setFillColor(c0, c1, c2); doc.setDrawColor(140, 110, 70); doc.setLineWidth(0.2);
     doc.rect(x, y - 1.8, 10, 2.6, "FD");
   } else if (kind === "point") {
-    doc.setFillColor(255); doc.setDrawColor(c0, c1, c2); doc.setLineWidth(0.4);
+    doc.setFillColor(255, 255, 255); doc.setDrawColor(c0, c1, c2); doc.setLineWidth(0.4);
     doc.circle(x + 5, y - 0.5, 1, "FD");
   } else if (kind === "arrow") {
     doc.setDrawColor(c0, c1, c2); doc.setFillColor(c0, c1, c2); doc.setLineWidth(0.6);
@@ -450,7 +450,7 @@ function legendLine(doc: jsPDF, x: number, y: number, kind: "line" | "dashed" | 
 }
 
 function drawNorth(doc: jsPDF, x: number, y: number) {
-  doc.setFillColor(255); doc.setDrawColor(80); doc.setLineWidth(0.3);
+  doc.setFillColor(255, 255, 255); doc.setDrawColor(80); doc.setLineWidth(0.3);
   doc.circle(x, y, 5, "FD");
   doc.setFillColor(20, 20, 20);
   doc.triangle(x, y - 4, x - 2, y + 1, x + 2, y + 1, "F");
@@ -466,7 +466,7 @@ function drawScaleBar(doc: jsPDF, x: number, y: number, scale: number) {
   const step = niceStep(targetM / 5);
   const ticks = 5;
   const totalMm = ticks * step * scale;
-  doc.setDrawColor(20); doc.setLineWidth(0.4); doc.setFillColor(255);
+  doc.setDrawColor(20); doc.setLineWidth(0.4); doc.setFillColor(255, 255, 255);
   for (let i = 0; i < ticks; i++) {
     const x0 = x + i * (totalMm / ticks);
     const x1 = x + (i + 1) * (totalMm / ticks);

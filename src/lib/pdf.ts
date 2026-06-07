@@ -1,11 +1,10 @@
-// AcreMap — Plan Géomètre mono-page (capture 2 like).
-// Format A3 paysage par défaut, 3 colonnes : infos | plan UTM | légende+coords.
+// AcreMap — Plan de Morcellement Parcelle Agricole (2D, mono-page A3 paysage).
+// Mise en page calquée sur le modèle CNEFEHB / AgriCapital SARL.
 import { jsPDF } from "jspdf";
 import proj4 from "proj4";
 import type { Domaine, Lot, Measurement, Parcelle, SP } from "./types";
-import { polygonAreaM2, polygonPerimeterM, haversine } from "./gps";
+import { polygonAreaM2, polygonPerimeterM } from "./gps";
 import { refOfficielle } from "./ref";
-import { formatArea } from "./format";
 import logo from "../assets/agricapital-logo.jpg";
 
 interface BuildArgs {
@@ -20,6 +19,29 @@ interface BuildArgs {
   format?: "a4" | "a3" | "a2" | "a1";
 }
 
+type RGB = readonly [number, number, number];
+const fill = (doc: jsPDF, c: RGB) => doc.setFillColor(c[0], c[1], c[2]);
+const stroke = (doc: jsPDF, c: RGB) => doc.setDrawColor(c[0], c[1], c[2]);
+const ink = (doc: jsPDF, c: RGB | number) =>
+  typeof c === "number" ? doc.setTextColor(c, c, c) : doc.setTextColor(c[0], c[1], c[2]);
+
+// ----- Palette du modèle -----
+const C: Record<string, RGB> = {
+  headerGreen: [58, 122, 42],
+  sectionDark: [45, 90, 35],
+  parcelGreen: [76, 175, 80],
+  lotFill: [212, 232, 184],
+  lotStroke: [110, 150, 80],
+  roadFill: [196, 168, 120],
+  roadStroke: [140, 110, 70],
+  borneFill: [255, 255, 255],
+  borneStroke: [40, 40, 40],
+  gridLight: [220, 220, 220],
+  rowAlt: [245, 245, 245],
+  tableHeader: [232, 240, 226],
+  textMuted: [110, 110, 110],
+};
+
 function utmZone(lng: number) { return Math.floor((lng + 180) / 6) + 1; }
 
 export function buildGeometrePdf(args: BuildArgs): Blob {
@@ -32,281 +54,441 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
   const doc = new jsPDF({ unit: "mm", format, orientation: "landscape" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
-  const M = 8;
+  const M = 6;
 
   const reference = parcelle && domaine && sp
     ? refOfficielle({ spCode: sp.code, domCode: domaine.code, parcCode: parcelle.code })
     : `MES-${m.id.slice(0, 8).toUpperCase()}`;
 
-  // ===== En-tête bandeau =====
-  doc.setFillColor(58, 122, 42);
-  doc.rect(0, 0, W, 16, "F");
-  try { doc.addImage(logo, "JPEG", M, 2, 12, 12); } catch { /* ignore */ }
-  doc.setTextColor(255);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(14);
-  doc.text("PLAN PARCELLAIRE — AcreMap", M + 16, 8);
+  // ============ EN-TÊTE ============
+  fill(doc, C.headerGreen);
+  doc.rect(0, 0, W, 22, "F");
+  try { doc.addImage(logo, "JPEG", M, 3, 16, 16); } catch { /* ignore */ }
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text(organisation.toUpperCase(), M + 20, 9);
   doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-  doc.text(`${organisation}  ·  Réf : ${reference}`, M + 16, 13);
-  doc.setFontSize(8);
-  doc.text(`Format ${format.toUpperCase()} · Échelle auto · Projection UTM WGS84`, W - M, 8, { align: "right" });
-  doc.text(new Date().toLocaleString("fr-FR"), W - M, 13, { align: "right" });
-  doc.setTextColor(0);
+  doc.text("Promotion Agricole & Services Intégrés", M + 20, 14);
 
-  // ===== Layout 3 colonnes =====
-  const top = 18;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+  doc.text("PLAN DE MORCELLEMENT — PARCELLE AGRICOLE", W / 2, 12, { align: "center" });
+
+  // Boîte référence à droite
+  const refBoxW = 70, refBoxH = 12;
+  doc.setFillColor(255, 255, 255); doc.setDrawColor(255, 255, 255);
+  doc.roundedRect(W - M - refBoxW, 5, refBoxW, refBoxH, 1.5, 1.5, "F");
+  ink(doc, C.headerGreen);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text(reference, W - M - refBoxW / 2, 13, { align: "center" });
+  doc.setTextColor(0, 0, 0);
+
+  // ============ LAYOUT 3 COLONNES ============
+  const top = 26;
   const bottom = H - M;
-  const colLeft = 78;
-  const colRight = 95;
-  const planX = M + colLeft + 4;
+  const colLeftW = 78;
+  const colRightW = 88;
+  const planX = M + colLeftW + 4;
   const planY = top;
-  const planW = W - 2 * M - colLeft - colRight - 8;
-  const planH = bottom - top - 4;
+  const planW = W - 2 * M - colLeftW - colRightW - 8;
+  const planH = bottom - top;
 
-  // ===== COLONNE GAUCHE — informations =====
-  let y = top;
+  // ============ COLONNE GAUCHE ============
+  let ly = top;
   const lx = M;
-  doc.setFontSize(10); doc.setFont("helvetica", "bold");
-  box(doc, lx, y, colLeft, 6, "Informations générales");
-  y += 8;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-  const idRows: [string, string][] = [
-    ["Référence", reference],
-    ["Sous-Préfecture", sp ? `${sp.name} (${sp.departement})` : "—"],
-    ["Région / District", sp ? `${sp.region} / ${sp.district}` : "—"],
-    ["Domaine", domaine ? `${domaine.code} — ${domaine.name}` : "—"],
-    ["Parcelle", parcelle?.code ?? "—"],
-    ["Propriétaire", parcelle?.ownerName ?? "—"],
-    ["Téléphone", parcelle?.ownerPhone ?? "—"],
-    ["Convention", parcelle?.conventionStatus ?? "—"],
-    ["Date du levé", new Date(m.createdAt).toLocaleDateString("fr-FR")],
-    ["Opérateur", operatorName],
-    ["Statut", m.status],
-  ];
-  for (const [k, v] of idRows) {
-    doc.setTextColor(110); doc.text(k, lx + 1, y);
-    doc.setTextColor(0); doc.text(String(v), lx + 30, y, { maxWidth: colLeft - 31 });
-    y += 4.5;
-  }
 
-  y += 3;
-  box(doc, lx, y, colLeft, 6, "Surfaces");
-  y += 8;
+  // Informations générales
+  sectionTitle(doc, lx, ly, colLeftW, "INFORMATIONS GÉNÉRALES");
+  ly += 6;
   const totalArea = polygonAreaM2(m.points);
-  const perim = polygonPerimeterM(m.points);
-  const lotsArea = lots.reduce((s, l) => s + l.areaM2, 0);
   const voieArea = voie.reduce((s, v) => s + polygonAreaM2(v), 0);
-  const reste = Math.max(0, totalArea - lotsArea - voieArea);
-  const surfRows: [string, string][] = [
-    ["Surface totale", `${formatArea(totalArea, "ha")}  (${totalArea.toFixed(0)} m²)`],
-    ["Périmètre", `${perim.toFixed(1)} m`],
-    ["Nb lots", String(lots.length)],
-    ["Surface lots", formatArea(lotsArea)],
-    ["Surface voie", voie.length ? formatArea(voieArea) : "—"],
-    ["Reste", reste > 50 ? formatArea(reste) : "—"],
-    ["Précision médiane", m.qa ? `± ${m.qa.medianAccuracyM.toFixed(1)} m` : "—"],
-    ["Meilleure précision", m.qa ? `± ${m.qa.bestAccuracyM.toFixed(1)} m` : "—"],
+  const lotsArea = lots.filter((l) => !l.isReserve).reduce((s, l) => s + l.areaM2, 0);
+  const reserveArea = lots.filter((l) => l.isReserve).reduce((s, l) => s + l.areaM2, 0);
+  const netArea = totalArea - voieArea;
+  const normalLots = lots.filter((l) => !l.isReserve);
+  const targetHa = normalLots.length > 0 ? Math.round(normalLots[0].areaM2 / 10000) || 1 : 1;
+
+  const infoRows: [string, string][] = [
+    ["Sous-Préfecture", sp ? `${sp.code} — ${sp.name}` : "—"],
+    ["Domaine", domaine?.code ?? "—"],
+    ["Parcelle", parcelle?.code ?? "—"],
+    ["Référence officielle", reference],
+    ["Superficie totale", `${(totalArea / 10000).toFixed(2)} hectares`],
+    ["Nombre de lots", `${normalLots.length} lots de ${targetHa} hectare${targetHa > 1 ? "s" : ""}`],
+    ["Type de convention", conventionLabel(parcelle?.conventionStatus)],
+    ["Date du plan", new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })],
+    ["Système de référence", `WGS 84 / UTM Zone ${m.points[0] ? utmZone(m.points[0].lng) : 30}${m.points[0] && m.points[0].lat >= 0 ? "N" : "S"}`],
   ];
-  for (const [k, v] of surfRows) {
-    doc.setTextColor(110); doc.text(k, lx + 1, y);
-    doc.setTextColor(0); doc.text(v, lx + 30, y);
-    y += 4.5;
+  ly = drawKVTable(doc, lx, ly, colLeftW, infoRows, 4.6);
+  ly += 4;
+
+  // Tableau des superficies
+  sectionTitle(doc, lx, ly, colLeftW, "TABLEAU DES SUPERFICIES");
+  ly += 6;
+  const surfRows: [string, string][] = [
+    ["Superficie brute (mesurée)", `${(totalArea / 10000).toFixed(2)} ha`],
+    ["Piste d'accès centrale", voie.length ? `${(voieArea / 10000).toFixed(2)} ha` : "—"],
+    ["Superficie nette exploitable", `${(netArea / 10000).toFixed(2)} ha`],
+    ["Nombre de lots", `${normalLots.length} lots`],
+    ["Superficie moyenne par lot", normalLots.length ? `${(lotsArea / normalLots.length / 10000).toFixed(2)} ha` : "—"],
+  ];
+  if (reserveArea > 50) surfRows.push(["Réserve", `${(reserveArea / 10000).toFixed(2)} ha`]);
+  ly = drawTwoColTable(doc, lx, ly, colLeftW, ["DÉSIGNATION", "SUPERFICIE"], surfRows);
+  ly += 4;
+
+  // Localisation
+  sectionTitle(doc, lx, ly, colLeftW, "LOCALISATION");
+  ly += 6;
+  const locH = 28;
+  doc.setDrawColor(180, 180, 180); doc.setFillColor(248, 248, 245);
+  doc.rect(lx, ly, colLeftW, locH, "FD");
+  // Mini cible
+  const mlx = lx + colLeftW / 2, mly = ly + locH / 2 - 2;
+  stroke(doc, C.parcelGreen); doc.setLineWidth(0.4);
+  doc.circle(mlx, mly, 1.6, "S");
+  doc.setFillColor(220, 60, 50); doc.circle(mlx, mly, 0.9, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(80, 80, 80);
+  doc.text("Parcelle", mlx + 2.4, mly + 0.5);
+  doc.setFontSize(7); doc.setTextColor(40, 40, 40);
+  doc.text(sp ? `${sp.code} — ${sp.name}` : "—", lx + colLeftW / 2, ly + locH - 5, { align: "center" });
+  doc.setFontSize(6); ink(doc, C.textMuted);
+  doc.text(sp ? `Département de ${sp.departement}` : "", lx + colLeftW / 2, ly + locH - 2.5, { align: "center" });
+  doc.text(sp ? `Région du ${sp.region}` : "", lx + colLeftW / 2, ly + locH - 0.6, { align: "center" });
+  ly += locH + 4;
+
+  // Notes
+  sectionTitle(doc, lx, ly, colLeftW, "NOTES");
+  ly += 6;
+  doc.setTextColor(40, 40, 40); doc.setFontSize(6.5); doc.setFont("helvetica", "normal");
+  const notes = [
+    "Les superficies sont approximatives et pourront être ajustées après bornage définitif.",
+    "Les limites sont issues d'un levé GPS et matérialisées sur le terrain par des bornes.",
+    `Chaque lot hectare fait l'objet d'un plan polygonal et d'un rapport technique individuel.`,
+  ];
+  for (const n of notes) {
+    fill(doc, C.parcelGreen); doc.circle(lx + 1.5, ly - 0.5, 0.7, "F");
+    const lines = doc.splitTextToSize(n, colLeftW - 5);
+    doc.text(lines, lx + 4, ly);
+    ly += lines.length * 2.8 + 1.5;
   }
 
-  y += 3;
-  box(doc, lx, y, colLeft, 6, "Mention légale");
-  y += 7;
-  doc.setFontSize(7); doc.setTextColor(80);
-  doc.text(
-    "Document de travail — non opposable. Le bornage légal et la certification de superficie restent du ressort exclusif d'un géomètre assermenté.",
-    lx + 1, y, { maxWidth: colLeft - 2 }
-  );
+  // Dressé par
+  ly = Math.max(ly + 2, bottom - 26);
+  doc.setDrawColor(180, 180, 180); doc.line(lx, ly, lx + colLeftW, ly);
+  ly += 4;
+  doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.setTextColor(40, 40, 40);
+  doc.text(`Dressé par : ${operatorName || "CNEFEHB"}`, lx + 1, ly);
+  ly += 3.5;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(6); ink(doc, C.textMuted);
+  doc.text("Cabinet de Négoce et d'Expertise Foncière", lx + 1, ly); ly += 2.6;
+  doc.text("Environnementale Hydraulique et Bâtiment", lx + 1, ly); ly += 2.6;
+  doc.text("Géomètre-Expert", lx + 1, ly); ly += 4;
+  doc.setDrawColor(200, 200, 200); doc.line(lx + 1, ly, lx + colLeftW - 1, ly);
+  doc.setFontSize(5.5); ink(doc, C.textMuted);
+  doc.text("Cachet & Signature", lx + colLeftW / 2, ly + 2, { align: "center" });
 
-  // ===== COLONNE CENTRALE — plan =====
-  doc.setDrawColor(120); doc.setLineWidth(0.3);
-  doc.rect(planX - 2, planY - 1, planW + 4, planH + 2);
+  // ============ CENTRE — PLAN 2D ============
+  doc.setDrawColor(160, 160, 160); doc.setLineWidth(0.3);
+  doc.rect(planX, planY, planW, planH);
 
   let utmZ = 30, north = true;
   let projDef = "+proj=utm +zone=30 +north +datum=WGS84 +units=m +no_defs";
+
   if (m.points.length >= 3) {
     utmZ = utmZone(m.points[0].lng);
     north = m.points[0].lat >= 0;
     projDef = `+proj=utm +zone=${utmZ} ${north ? "+north" : "+south"} +datum=WGS84 +units=m +no_defs`;
-    const utmPoints = m.points.map((p) => proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number]);
-    const allUtm: [number, number][] = [...utmPoints];
+    const parcUtm = m.points.map((p) => proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number]);
+    const allUtm: [number, number][] = [...parcUtm];
     for (const l of lots) for (const p of l.polygon) allUtm.push(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number]);
-    const xs = allUtm.map((p) => p[0]); const ys = allUtm.map((p) => p[1]);
+    for (const v of voie) for (const p of v) allUtm.push(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number]);
+
+    const xs = allUtm.map((p) => p[0]), ys = allUtm.map((p) => p[1]);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const dx = maxX - minX, dy = maxY - minY;
-    const pad = 0.06;
-    const sx = (planW - 8) / (dx * (1 + pad));
-    const sy = (planH - 14) / (dy * (1 + pad));
-    const scale = Math.min(sx, sy);
+    const padTop = 14, padBot = 12, padL = 14, padR = 14;
+    const innerW = planW - padL - padR, innerH = planH - padTop - padBot;
+    const dx = Math.max(1, maxX - minX), dy = Math.max(1, maxY - minY);
+    const scale = Math.min(innerW / dx, innerH / dy);
     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
     const project = (x: number, y2: number): [number, number] => [
       planX + planW / 2 + (x - cx) * scale,
       planY + planH / 2 - (y2 - cy) * scale,
     ];
 
-    // Grille UTM
-    doc.setDrawColor(220); doc.setLineWidth(0.1);
-    const gridStep = niceStep((Math.max(dx, dy)) / 6);
+    // Fond clair vert pâle
+    doc.setFillColor(238, 244, 230);
+    doc.rect(planX + 0.5, planY + 0.5, planW - 1, planH - 1, "F");
+
+    // Grille UTM + étiquettes
+    const gridStep = niceStep(Math.max(dx, dy) / 6);
     const gx0 = Math.ceil(minX / gridStep) * gridStep;
     const gy0 = Math.ceil(minY / gridStep) * gridStep;
-    doc.setFontSize(5); doc.setTextColor(140);
+    stroke(doc, C.gridLight); doc.setLineWidth(0.1);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); doc.setTextColor(90, 90, 90);
     for (let gx = gx0; gx <= maxX; gx += gridStep) {
-      const [px, py1] = project(gx, minY);
-      const [, py2] = project(gx, maxY);
-      doc.line(px, py1, px, py2);
-      doc.text(`${gx.toFixed(0)}`, px, planY + planH - 1, { align: "center" });
+      const [px] = project(gx, minY);
+      doc.line(px, planY + 4, px, planY + planH - 4);
+      doc.text(`${gx.toFixed(0)}`, px, planY + 3, { align: "center" });
+      doc.text(`${gx.toFixed(0)}`, px, planY + planH - 1.2, { align: "center" });
     }
     for (let gy = gy0; gy <= maxY; gy += gridStep) {
-      const [px1, py] = project(minX, gy);
-      const [px2] = project(maxX, gy);
-      doc.line(px1, py, px2, py);
-      doc.text(`${gy.toFixed(0)}`, planX + 1, py, { align: "left", baseline: "middle" });
+      const [, py] = project(minX, gy);
+      doc.line(planX + 4, py, planX + planW - 4, py);
+      doc.text(`${gy.toFixed(0)}`, planX + 3, py, { align: "left", baseline: "middle" });
+      doc.text(`${gy.toFixed(0)}`, planX + planW - 1, py, { align: "right", baseline: "middle" });
     }
 
-    // Voie (marron)
-    doc.setFillColor(150, 100, 60); doc.setDrawColor(110, 70, 40); doc.setLineWidth(0.3);
+    // Lots (vert clair uniforme)
+    doc.setLineWidth(0.15);
+    lots.forEach((l) => {
+      if (l.polygon.length < 3) return;
+      const pts = l.polygon.map((p) => project(...(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number])));
+      doc.setFillColor(...(l.isReserve ? [248, 232, 200] as const : C.lotFill));
+      stroke(doc, C.lotStroke);
+      doc.setLineDashPattern([0.8, 0.8], 0);
+      drawPoly(doc, pts, "FD");
+      doc.setLineDashPattern([], 0);
+      const cx2 = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy2 = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+      doc.text(l.code, cx2, cy2 - 0.5, { align: "center" });
+      doc.setFontSize(6); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
+      doc.text(`${(l.areaM2 / 10000).toFixed(2)} ha`.replace(".", ","), cx2, cy2 + 2.2, { align: "center" });
+    });
+
+    // Piste d'accès centrale
+    fill(doc, C.roadFill); stroke(doc, C.roadStroke); doc.setLineWidth(0.25);
     for (const v of voie) {
       if (v.length < 3) continue;
       const pts = v.map((p) => project(...(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number])));
-      drawPoly(doc, pts, "F");
+      drawPoly(doc, pts, "FD");
     }
 
-    // Lots (couleurs cyclées)
-    const palette = [[200, 230, 200], [200, 220, 240], [240, 220, 200], [230, 210, 240], [220, 240, 220], [240, 230, 200]];
-    doc.setLineWidth(0.25);
-    lots.forEach((l, i) => {
-      if (l.polygon.length < 3) return;
-      const c = palette[i % palette.length];
-      doc.setFillColor(c[0], c[1], c[2]); doc.setDrawColor(80, 120, 80);
-      const pts = l.polygon.map((p) => project(...(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number])));
-      drawPoly(doc, pts, "FD");
-      const cx2 = pts.reduce((s, p) => s + p[0], 0) / pts.length;
-      const cy2 = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-      doc.setTextColor(40); doc.setFontSize(7); doc.setFont("helvetica", "bold");
-      doc.text(l.code, cx2, cy2, { align: "center" });
-      doc.setFontSize(5); doc.setFont("helvetica", "normal");
-      doc.text(formatArea(l.areaM2), cx2, cy2 + 2.5, { align: "center" });
-    });
-
-    // Polygone parcelle (contour)
-    doc.setDrawColor(58, 122, 42); doc.setLineWidth(0.6); doc.setFillColor(255, 255, 255);
-    const parcPts = utmPoints.map(([x, y2]) => project(x, y2));
+    // Contour parcelle (vert vif)
+    stroke(doc, C.parcelGreen); doc.setLineWidth(0.9); doc.setFillColor(255, 255, 255);
+    const parcPts = parcUtm.map(([x, y2]) => project(x, y2));
     drawPoly(doc, parcPts, "S");
 
     // Bornes A1..An
     doc.setFontSize(6); doc.setFont("helvetica", "bold");
     parcPts.forEach(([x, y2], i) => {
-      doc.setFillColor(220, 30, 30); doc.circle(x, y2, 1.1, "F");
-      doc.setTextColor(0); doc.text(`A${i + 1}`, x + 1.6, y2 - 1.2);
+      fill(doc, C.borneFill); stroke(doc, C.borneStroke); doc.setLineWidth(0.3);
+      doc.circle(x, y2, 1.1, "FD");
+      doc.setTextColor(20, 20, 20);
+      doc.text(`A${i + 1}`, x + 1.6, y2 + 2.4);
     });
 
-    // Distances par segment
-    doc.setFontSize(5); doc.setTextColor(60); doc.setFont("helvetica", "normal");
-    for (let i = 0; i < m.points.length; i++) {
-      const a = m.points[i], b = m.points[(i + 1) % m.points.length];
-      const d = haversine(a, b);
-      const [ax, ay] = parcPts[i], [bx, by] = parcPts[(i + 1) % parcPts.length];
-      doc.text(`${d.toFixed(1)} m`, (ax + bx) / 2, (ay + by) / 2 - 0.5, { align: "center" });
-    }
+    // Flèche Nord (haut-gauche)
+    drawNorth(doc, planX + 10, planY + 13);
 
-    // Flèche Nord
-    const nx = planX + planW - 8, ny = planY + 10;
-    doc.setDrawColor(0, 0, 0); doc.setFillColor(0, 0, 0);
-    doc.line(nx, ny + 5, nx, ny - 4);
-    doc.triangle(nx - 1.5, ny - 2, nx + 1.5, ny - 2, nx, ny - 5, "F");
-    doc.setFontSize(7); doc.text("N", nx, ny + 8, { align: "center" });
-
-    // Échelle graphique
-    const scaleM = niceStep((maxX - minX) / 5);
-    const sxLen = scaleM * scale;
-    const sx0 = planX + 4, sy0 = planY + planH - 6;
-    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.5);
-    doc.line(sx0, sy0, sx0 + sxLen, sy0);
-    doc.line(sx0, sy0 - 1, sx0, sy0 + 1);
-    doc.line(sx0 + sxLen, sy0 - 1, sx0 + sxLen, sy0 + 1);
-    doc.setFontSize(6); doc.text(`${scaleM} m`, sx0 + sxLen / 2, sy0 - 1.5, { align: "center" });
+    // Échelle graphique (bas-centre)
+    drawScaleBar(doc, planX + planW / 2 - 28, planY + planH - 7, scale);
   } else {
-    doc.setFontSize(10); doc.setTextColor(150);
+    doc.setFontSize(10); doc.setTextColor(150, 150, 150);
     doc.text("Plan indisponible (moins de 3 points).", planX + planW / 2, planY + planH / 2, { align: "center" });
   }
 
-  // ===== COLONNE DROITE — légende + tables =====
-  const rx = W - M - colRight;
+  // ============ COLONNE DROITE ============
+  const rx = W - M - colRightW;
   let ry = top;
-  box(doc, rx, ry, colRight, 6, "Légende");
-  ry += 8;
-  doc.setFontSize(7); doc.setFont("helvetica", "normal");
-  legendRow(doc, rx, ry, [58, 122, 42], "Limite parcelle"); ry += 4.5;
-  legendRow(doc, rx, ry, [150, 100, 60], "Voie principale"); ry += 4.5;
-  legendRow(doc, rx, ry, [200, 230, 200], "Lots morcelés"); ry += 4.5;
-  legendRow(doc, rx, ry, [220, 30, 30], "Bornes A1..An"); ry += 4.5;
-  legendRow(doc, rx, ry, [220, 220, 220], `Grille UTM ${utmZ}${north ? "N" : "S"} (m)`); ry += 6;
 
+  // LÉGENDE
+  sectionTitle(doc, rx, ry, colRightW, "LÉGENDE");
+  ry += 7;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(40, 40, 40);
+  legendLine(doc, rx + 1, ry, "line", C.parcelGreen, "Limite de la parcelle"); ry += 4.5;
+  legendLine(doc, rx + 1, ry, "dashed", C.lotStroke, `Limite des lots (${targetHa} ha)`); ry += 4.5;
+  legendLine(doc, rx + 1, ry, "fill", C.roadFill, "Piste d'accès centrale (6 m de large)"); ry += 4.5;
+  legendLine(doc, rx + 1, ry, "arrow", [240, 180, 40], "Accès principal"); ry += 4.5;
+  legendLine(doc, rx + 1, ry, "point", C.borneStroke, "Point de limite (bornes)"); ry += 6;
+
+  // TABLEAU DES LOTS
   if (lots.length > 0) {
-    box(doc, rx, ry, colRight, 6, `Lots (${lots.length})`); ry += 7;
-    doc.setFontSize(6.5); doc.setFont("helvetica", "bold");
-    doc.text("Code", rx + 1, ry); doc.text("Surface", rx + 14, ry); doc.text("Souscripteur", rx + 35, ry);
-    ry += 3; doc.setDrawColor(200); doc.line(rx, ry, rx + colRight, ry); ry += 1;
-    doc.setFont("helvetica", "normal");
+    sectionTitle(doc, rx, ry, colRightW, `TABLEAU DES LOTS — ${targetHa} HECTARE${targetHa > 1 ? "S" : ""} CHACUN`);
+    ry += 5;
+    const headers = ["N° LOT", "RÉFÉRENCE OFFICIELLE", "SUPERFICIE"];
+    const widths = [10, 56, 22];
+    ry = drawTableRow(doc, rx, ry, widths, headers, true);
+    let i = 1;
     for (const l of lots) {
-      if (ry > bottom - 60) break;
-      doc.text(l.code, rx + 1, ry);
-      doc.text(formatArea(l.areaM2), rx + 14, ry);
-      doc.text(l.assigneeName ?? "—", rx + 35, ry, { maxWidth: colRight - 36 });
-      ry += 3.6;
+      if (ry > bottom - 50) break;
+      const row = [String(i), `${reference}-${l.code}`, `${(l.areaM2 / 10000).toFixed(2)} ha`.replace(".", ",")];
+      ry = drawTableRow(doc, rx, ry, widths, row, false, i % 2 === 0);
+      i++;
     }
-    ry += 2;
+    ry += 4;
   }
 
-  // Coordonnées UTM des bornes
+  // COORDONNÉES UTM
   if (m.points.length > 0 && ry < bottom - 30) {
-    box(doc, rx, ry, colRight, 6, `Coordonnées UTM ${utmZ}${north ? "N" : "S"}`); ry += 7;
-    doc.setFontSize(6.5); doc.setFont("helvetica", "bold");
-    doc.text("Pt", rx + 1, ry); doc.text("X (E)", rx + 12, ry); doc.text("Y (N)", rx + 36, ry); doc.text("±m", rx + 64, ry);
-    ry += 3; doc.line(rx, ry, rx + colRight, ry); ry += 1;
-    doc.setFont("helvetica", "normal");
+    sectionTitle(doc, rx, ry, colRightW, `COORDONNÉES DES POINTS DE LIMITES (WGS 84 / UTM ${utmZ}${north ? "N" : "S"})`);
+    ry += 5;
+    const headers = ["POINT", "X (m)", "Y (m)"];
+    const widths = [18, 35, 35];
+    ry = drawTableRow(doc, rx, ry, widths, headers, true);
     for (let i = 0; i < m.points.length; i++) {
-      if (ry > bottom - 4) break;
+      if (ry > bottom - 18) break;
       const p = m.points[i];
       const [x, y2] = proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number];
-      doc.text(`A${i + 1}`, rx + 1, ry);
-      doc.text(x.toFixed(2), rx + 12, ry);
-      doc.text(y2.toFixed(2), rx + 36, ry);
-      doc.text(`±${p.accuracy.toFixed(1)}`, rx + 64, ry);
-      ry += 3.4;
+      ry = drawTableRow(doc, rx, ry, widths, [`A${i + 1}`, x.toFixed(0), y2.toFixed(0)], false, i % 2 === 0);
     }
+    ry += 4;
   }
 
-  // ===== Pied =====
-  doc.setDrawColor(220); doc.line(M, H - 4, W - M, H - 4);
-  doc.setFontSize(6); doc.setTextColor(110);
-  doc.text(`AcreMap · ${organisation} · Réf ${reference}`, M, H - 1.5);
-  doc.text(`Page 1/1`, W - M, H - 1.5, { align: "right" });
+  // REMARQUES IMPORTANTES (bas)
+  if (ry < bottom - 8) {
+    doc.setDrawColor(180, 180, 180); doc.line(rx, ry, rx + colRightW, ry); ry += 3;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7); ink(doc, C.headerGreen);
+    doc.text("REMARQUES IMPORTANTES", rx + colRightW / 2, ry, { align: "center" });
+    ry += 3.5;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(40, 40, 40);
+    const rem = "Ce plan est établi à partir d'un levé GPS. Le bornage contradictoire et la matérialisation physique des limites seront effectués sur le terrain avant signature des conventions.";
+    const lines = doc.splitTextToSize(rem, colRightW - 2);
+    doc.text(lines, rx + 1, ry);
+  }
 
   return doc.output("blob");
 }
 
-function box(doc: jsPDF, x: number, y: number, w: number, h: number, title: string) {
-  doc.setFillColor(58, 122, 42); doc.rect(x, y, w, h, "F");
-  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
-  doc.text(title, x + 2, y + h - 1.6);
-  doc.setTextColor(0);
+// ----- Helpers -----
+function conventionLabel(s?: string | null): string {
+  if (s === "AC") return "Achat-Cession";
+  if (s === "EN_COURS") return "En cours";
+  if (s === "PP") return "Planté-Partagé";
+  return "—";
 }
 
-function legendRow(doc: jsPDF, x: number, y: number, color: number[], label: string) {
-  doc.setFillColor(color[0], color[1], color[2]); doc.setDrawColor(80);
-  doc.rect(x + 1, y - 2.6, 4, 3, "FD");
-  doc.setTextColor(0); doc.setFontSize(7); doc.text(label, x + 7, y);
+function sectionTitle(doc: jsPDF, x: number, y: number, w: number, title: string) {
+  fill(doc, C.sectionDark);
+  doc.rect(x, y, w, 5, "F");
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5);
+  doc.text(title, x + w / 2, y + 3.4, { align: "center" });
+  doc.setTextColor(0, 0, 0);
+}
+
+function drawKVTable(doc: jsPDF, x: number, y: number, w: number, rows: [string, string][], rowH = 4.5): number {
+  doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.1);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(6.8);
+  const keyW = 30;
+  rows.forEach(([k, v], i) => {
+    if (i % 2 === 0) { doc.setFillColor(250, 250, 248); doc.rect(x, y + i * rowH, w, rowH, "F"); }
+    doc.setTextColor(80, 80, 80); doc.text(k, x + 1, y + i * rowH + rowH / 2 + 1);
+    doc.setTextColor(20, 20, 20); doc.text(":", x + keyW - 1, y + i * rowH + rowH / 2 + 1);
+    doc.setFont("helvetica", "bold");
+    doc.text(String(v), x + keyW + 1, y + i * rowH + rowH / 2 + 1, { maxWidth: w - keyW - 2 });
+    doc.setFont("helvetica", "normal");
+  });
+  doc.rect(x, y, w, rows.length * rowH, "S");
+  return y + rows.length * rowH;
+}
+
+function drawTwoColTable(doc: jsPDF, x: number, y: number, w: number, headers: [string, string], rows: [string, string][]): number {
+  const c1 = w * 0.62;
+  const rowH = 5;
+  // header
+  fill(doc, C.tableHeader); doc.rect(x, y, w, rowH, "F");
+  doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.15);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(6.8); doc.setTextColor(20, 20, 20);
+  doc.text(headers[0], x + 1.5, y + 3.4);
+  doc.text(headers[1], x + c1 + 1.5, y + 3.4);
+  y += rowH;
+  doc.setFont("helvetica", "normal");
+  rows.forEach(([a, b], i) => {
+    if (i % 2 === 1) { doc.setFillColor(248, 250, 245); doc.rect(x, y, w, rowH, "F"); }
+    doc.setTextColor(30, 30, 30); doc.text(a, x + 1.5, y + 3.4);
+    doc.setFont("helvetica", "bold"); doc.text(b, x + c1 + 1.5, y + 3.4);
+    doc.setFont("helvetica", "normal");
+    y += rowH;
+  });
+  doc.setDrawColor(180, 180, 180); doc.rect(x, y - rows.length * rowH - rowH, w, (rows.length + 1) * rowH, "S");
+  doc.line(x + c1, y - rows.length * rowH - rowH, x + c1, y);
+  return y;
+}
+
+function drawTableRow(doc: jsPDF, x: number, y: number, widths: number[], cells: string[], header: boolean, alt = false): number {
+  const rowH = header ? 5 : 4.4;
+  const totalW = widths.reduce((a, b) => a + b, 0);
+  if (header) { fill(doc, C.tableHeader); doc.rect(x, y, totalW, rowH, "F"); }
+  else if (alt) { doc.setFillColor(248, 250, 245); doc.rect(x, y, totalW, rowH, "F"); }
+  doc.setFont("helvetica", header ? "bold" : "normal"); doc.setFontSize(header ? 6.5 : 6.5);
+  doc.setTextColor(header ? 20 : 30);
+  let cx = x;
+  cells.forEach((c, i) => {
+    doc.text(c, cx + widths[i] / 2, y + rowH / 2 + 1.2, { align: "center" });
+    cx += widths[i];
+  });
+  doc.setDrawColor(190, 190, 190); doc.setLineWidth(0.1);
+  doc.rect(x, y, totalW, rowH, "S");
+  // vertical separators
+  let vx = x;
+  for (let i = 0; i < widths.length - 1; i++) { vx += widths[i]; doc.line(vx, y, vx, y + rowH); }
+  return y + rowH;
+}
+
+function legendLine(doc: jsPDF, x: number, y: number, kind: "line" | "dashed" | "fill" | "point" | "arrow", color: readonly number[], label: string) {
+  const c0 = color[0], c1 = color[1], c2 = color[2];
+  if (kind === "line") {
+    doc.setDrawColor(c0, c1, c2); doc.setLineWidth(0.7);
+    doc.line(x, y - 0.5, x + 10, y - 0.5);
+  } else if (kind === "dashed") {
+    doc.setDrawColor(c0, c1, c2); doc.setLineWidth(0.4);
+    doc.setLineDashPattern([0.8, 0.8], 0); doc.line(x, y - 0.5, x + 10, y - 0.5);
+    doc.setLineDashPattern([], 0);
+  } else if (kind === "fill") {
+    doc.setFillColor(c0, c1, c2); doc.setDrawColor(140, 110, 70); doc.setLineWidth(0.2);
+    doc.rect(x, y - 1.8, 10, 2.6, "FD");
+  } else if (kind === "point") {
+    doc.setFillColor(255, 255, 255); doc.setDrawColor(c0, c1, c2); doc.setLineWidth(0.4);
+    doc.circle(x + 5, y - 0.5, 1, "FD");
+  } else if (kind === "arrow") {
+    doc.setDrawColor(c0, c1, c2); doc.setFillColor(c0, c1, c2); doc.setLineWidth(0.6);
+    doc.line(x, y - 0.5, x + 8, y - 0.5);
+    doc.triangle(x + 8, y - 2, x + 8, y + 1, x + 10.5, y - 0.5, "F");
+  }
+  doc.setTextColor(40, 40, 40); doc.setFontSize(7); doc.setFont("helvetica", "normal");
+  doc.text(label, x + 13, y);
+}
+
+function drawNorth(doc: jsPDF, x: number, y: number) {
+  doc.setFillColor(255, 255, 255); doc.setDrawColor(80, 80, 80); doc.setLineWidth(0.3);
+  doc.circle(x, y, 5, "FD");
+  doc.setFillColor(20, 20, 20);
+  doc.triangle(x, y - 4, x - 2, y + 1, x + 2, y + 1, "F");
+  doc.setFillColor(180, 180, 180); doc.triangle(x, y + 4, x - 2, y - 1, x + 2, y - 1, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(20, 20, 20);
+  doc.text("N", x, y - 5.6, { align: "center" });
+}
+
+function drawScaleBar(doc: jsPDF, x: number, y: number, scale: number) {
+  // Choisir une longueur en mètres "ronde" qui tient en ~55mm
+  const targetMm = 55;
+  const targetM = targetMm / scale;
+  const step = niceStep(targetM / 5);
+  const ticks = 5;
+  const totalMm = ticks * step * scale;
+  doc.setDrawColor(20, 20, 20); doc.setLineWidth(0.4); doc.setFillColor(255, 255, 255);
+  for (let i = 0; i < ticks; i++) {
+    const x0 = x + i * (totalMm / ticks);
+    const x1 = x + (i + 1) * (totalMm / ticks);
+    doc.setFillColor(i % 2 === 0 ? 20 : 255, i % 2 === 0 ? 20 : 255, i % 2 === 0 ? 20 : 255);
+    doc.rect(x0, y, x1 - x0, 1.4, "FD");
+  }
+  doc.setFontSize(5.5); doc.setTextColor(30, 30, 30); doc.setFont("helvetica", "normal");
+  for (let i = 0; i <= ticks; i++) {
+    const xi = x + i * (totalMm / ticks);
+    doc.text(`${(i * step).toFixed(0)}`, xi, y - 0.8, { align: "center" });
+  }
+  doc.text("m", x + totalMm + 2, y + 1, { baseline: "middle" });
+  doc.setFont("helvetica", "bold"); doc.setFontSize(6.5);
+  const denom = Math.round(1000 / scale); // mm réels par mm carte ≈ 1/scale*1000
+  doc.text(`ÉCHELLE GRAPHIQUE  ·  Échelle : 1 / ${denom.toLocaleString("fr-FR")}`, x + totalMm / 2, y + 4.2, { align: "center" });
 }
 
 function drawPoly(doc: jsPDF, pts: [number, number][], style: "F" | "S" | "FD") {
   if (pts.length < 2) return;
   const lines = pts.slice(1).map(([x, y], i) => [x - pts[i][0], y - pts[i][1]] as [number, number]);
-  (doc as any).lines(lines, pts[0][0], pts[0][1], [1, 1], style, true);
+  (doc as unknown as { lines: (l: number[][], x: number, y: number, scale: number[], style: string, close: boolean) => void })
+    .lines(lines, pts[0][0], pts[0][1], [1, 1], style, true);
 }
 
 function niceStep(approx: number): number {

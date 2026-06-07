@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { db, isBrowser } from "@/lib/db";
@@ -15,14 +15,23 @@ type Tab = "all" | "draft" | "submitted" | "validated";
 
 function ParcellesHub() {
   const [tab, setTab] = useState<Tab>("all");
+  const [dbError, setDbError] = useState<string | null>(null);
 
   const data = useLiveQuery(async () => {
     if (!isBrowser()) return null;
-    const d = db();
-    const [mes, parcs, doms, sps] = await Promise.all([
-      d.measurements.toArray(), d.parcelles.toArray(), d.domaines.toArray(), d.sps.toArray(),
-    ]);
-    return { mes: mes.sort((a, b) => b.createdAt - a.createdAt), parcs, doms, sps };
+    try {
+      const d = db();
+      await d.open();
+      const [mes, parcs, doms, sps] = await Promise.all([
+        d.measurements.toArray(), d.parcelles.toArray(), d.domaines.toArray(), d.sps.toArray(),
+      ]);
+      setDbError(null);
+      return { mes: mes.sort((a, b) => b.createdAt - a.createdAt), parcs, doms, sps };
+    } catch (e: unknown) {
+      const err = e as { name?: string; message?: string };
+      setDbError(`${err.name ?? "Erreur"}: ${err.message ?? String(e)}`);
+      return null;
+    }
   }, []);
 
   const counters = {

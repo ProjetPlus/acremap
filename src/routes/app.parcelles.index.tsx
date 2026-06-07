@@ -60,6 +60,20 @@ function ParcellesHub() {
         </Link>
       </div>
 
+      {dbError && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-sm">
+          <div className="font-semibold text-destructive">⚠ Base locale inaccessible — vos enregistrements ne peuvent pas être lus.</div>
+          <div className="text-xs mt-1 text-muted-foreground break-all">{dbError}</div>
+          <Link to="/app/debug" className="inline-block mt-2 text-xs text-primary underline">Ouvrir le diagnostic →</Link>
+        </div>
+      )}
+
+      {data === undefined && !dbError && (
+        <div className="bg-card rounded-xl p-6 text-center text-sm text-muted-foreground shadow-card">Chargement de la base locale…</div>
+      )}
+
+
+
       <div className="flex flex-wrap gap-1.5 border-b">
         <TabBtn active={tab === "all"} onClick={() => setTab("all")} label="Toutes" count={counters.all} />
         <TabBtn active={tab === "draft"} onClick={() => setTab("draft")} label="Brouillons" count={counters.draft} />

@@ -49,7 +49,7 @@ function MeasurePage() {
   const [rejectedCount, setRejectedCount] = useState(0);
   const [acceptedCount, setAcceptedCount] = useState(0);
   const [qaHistory, setQaHistory] = useState<{ ts: number; acc: number; ok: boolean }[]>([]);
-  const [capturing, setCapturing] = useState<{ n: number; target: number; acc: number } | null>(null);
+  // Marquage instantané — pas d'état de capture progressive
   const [autoMark100, setAutoMark100] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statsOpen, setStatsOpen] = useState(true);

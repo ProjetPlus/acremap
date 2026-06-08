@@ -418,20 +418,7 @@ function MeasurePage() {
         </div>
       )}
 
-      {/* OVERLAY CAPTURE STATIQUE */}
-      {capturing && (
-        <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-[1000]">
-          <div className="bg-card p-6 rounded-2xl max-w-xs text-center shadow-elevated">
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Capture statique</div>
-            <div className="text-3xl font-bold text-primary mt-2">{capturing.n} / {capturing.target}</div>
-            <div className="text-xs text-muted-foreground mt-1">±{capturing.acc.toFixed(1)} m</div>
-            <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-primary transition-all" style={{ width: `${(capturing.n / capturing.target) * 100}%` }} />
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-3">Restez immobile.</p>
-          </div>
-        </div>
-      )}
+      {/* Marquage instantané — pas d'overlay de capture */}
 
       {/* DRAWER OPTIONS */}
       {optionsOpen && (

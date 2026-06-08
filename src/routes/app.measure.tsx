@@ -347,7 +347,7 @@ function MeasurePage() {
         <div className="flex gap-1.5 items-stretch">
           <button
             onClick={markPoint}
-            disabled={!running || !!capturing || paused}
+            disabled={!running || paused}
             className="flex-1 h-14 rounded-2xl bg-accent text-accent-foreground font-bold shadow-elevated disabled:opacity-40 flex flex-col items-center justify-center gap-0.5"
           >
             <MapPin className="w-5 h-5" />

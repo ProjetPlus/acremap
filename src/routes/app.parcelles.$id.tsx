@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapView } from "@/components/MapView";
 import { db, isBrowser } from "@/lib/db";
 import { useAuth, hasRole } from "@/lib/auth";

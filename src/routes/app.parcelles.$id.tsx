@@ -610,6 +610,54 @@ function ParcDetail() {
           </div>
         </div>
       </aside>
+
+      {/* APERÇU AVANT IMPRESSION */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-[2000] bg-black/70 flex flex-col" onClick={() => setPreviewOpen(false)}>
+          <div className="bg-card p-3 flex items-center gap-2 border-b" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-bold text-sm">Aperçu avant impression</h2>
+            <div className="ml-3 flex items-center gap-1.5 text-xs">
+              <button onClick={() => setPreviewVariant("entreprise")}
+                className={`px-2.5 py-1 rounded ${previewVariant === "entreprise" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                Entreprise
+              </button>
+              <button onClick={() => setPreviewVariant("client")}
+                className={`px-2.5 py-1 rounded ${previewVariant === "client" ? "bg-accent text-accent-foreground" : "bg-muted"}`}>
+                Client
+              </button>
+              {previewVariant === "client" && (
+                <select value={previewFocusLot} onChange={(e) => setPreviewFocusLot(e.target.value)}
+                  className="px-2 py-1 rounded border bg-background text-xs">
+                  {lots.filter(l => !l.isReserve).map(l => (
+                    <option key={l.id} value={l.code}>Lot {l.code}{l.assigneeName ? ` — ${l.assigneeName}` : ""}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="flex-1" />
+            <button onClick={() => {
+              if (previewVariant === "client") exportPdfClientLot(previewFocusLot);
+              else exportPdf();
+            }} className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-semibold">
+              Télécharger PDF
+            </button>
+            <button onClick={() => {
+              const iframe = document.getElementById("pdf-preview-iframe") as HTMLIFrameElement | null;
+              iframe?.contentWindow?.print();
+            }} className="px-3 py-1.5 rounded bg-accent text-accent-foreground text-xs font-semibold">
+              Imprimer
+            </button>
+            <button onClick={() => setPreviewOpen(false)} className="px-3 py-1.5 rounded border text-xs">Fermer</button>
+          </div>
+          <div className="flex-1 bg-muted" onClick={(e) => e.stopPropagation()}>
+            {previewUrl ? (
+              <iframe id="pdf-preview-iframe" src={previewUrl} title="Aperçu PDF" className="w-full h-full border-0" />
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Génération du PDF…</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -166,6 +166,29 @@ function ParcDetail() {
     return { lots: allLots, totalAreaM2: total, strictValid, errors, lotAreaTargetM2: lotHa * 10_000 };
   }, [data?.m, morcSources, voieResult, lotHa, morcAxis]);
 
+  // Génération à la volée du PDF d'aperçu (mode entreprise ou client)
+  useEffect(() => {
+    if (!previewOpen || !data?.m) return;
+    const voiePolys = voieResult ? voieResult.voie : [];
+    let blob: Blob;
+    if (previewVariant === "client") {
+      blob = buildPdfClient({
+        measurement: data.m, parcelle: data.parc ?? null, domaine: data.dom ?? null, sp: data.sp ?? null,
+        lots: data.lots, voie: voiePolys, focusLotCode: previewFocusLot || undefined,
+      });
+    } else {
+      blob = buildGeometrePdf({
+        measurement: data.m, parcelle: data.parc ?? null, domaine: data.dom ?? null, sp: data.sp ?? null,
+        lots: data.lots, voie: voiePolys, operatorName: user?.fullName ?? "—",
+      });
+    }
+    const url = URL.createObjectURL(blob);
+    setPreviewUrl(url);
+    return () => { URL.revokeObjectURL(url); };
+  }, [previewOpen, previewVariant, previewFocusLot, data, voieResult, user?.fullName]);
+
+
+
 
   if (data === undefined) return <div className="p-8 text-center text-muted-foreground">Chargement…</div>;
   const { m, parc, dom, sp, lots } = data;

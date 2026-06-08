@@ -560,10 +560,24 @@ function ParcDetail() {
           </div>
 
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold">Exports</h3>
+            <h3 className="text-sm font-semibold">Exports & impression</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => openPreview("entreprise")}
+                className="h-11 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1">
+                👁 Aperçu entreprise
+              </button>
+              <button onClick={() => openPreview("client")} disabled={lots.filter(l => !l.isReserve).length === 0}
+                className="h-11 rounded-lg bg-accent text-accent-foreground text-xs font-semibold flex items-center justify-center gap-1 disabled:opacity-40">
+                👁 Aperçu client
+              </button>
+            </div>
             <button onClick={exportPdf}
-              className="w-full h-11 rounded-lg bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2">
-              📄 Document de travail géomètre (PDF)
+              className="w-full h-10 rounded-lg border border-primary text-primary text-xs font-semibold flex items-center justify-center gap-2">
+              📄 PDF Plan Entreprise (avec cotes & coordonnées)
+            </button>
+            <button onClick={exportAllClientsZip} disabled={lots.filter(l => !l.isReserve).length === 0}
+              className="w-full h-10 rounded-lg border border-accent text-accent text-xs font-semibold flex items-center justify-center gap-2 disabled:opacity-40">
+              📦 Tous les plans clients (ZIP — 1 PDF par lot)
             </button>
             <div className="grid grid-cols-3 gap-2">
               <button onClick={() => exportAs("dxf")} className="h-10 rounded-md border text-xs font-semibold hover:bg-muted">DXF (AutoCAD)</button>
@@ -573,7 +587,7 @@ function ParcDetail() {
               <button onClick={() => exportAs("csv")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">CSV points</button>
             </div>
             <div className="text-[10px] text-muted-foreground">
-              PDF mono-page A3 paysage (plan UTM, lots, voie, bornes A1..An, légende, coordonnées). DXF par calques (PARCELLE/LOTS/VOIE/BORNES). Shapefile zip (polygones + attributs).
+              <b>Entreprise</b> : plan A3 avec grille UTM, cotes des côtés, coordonnées des bornes. <b>Client</b> : version épurée, un PDF par souscripteur mettant en évidence son lot.
             </div>
           </div>
 

@@ -510,3 +510,192 @@ function niceStep(approx: number): number {
   if (f < 1.5) nice = 1; else if (f < 3) nice = 2; else if (f < 7) nice = 5; else nice = 10;
   return nice * exp;
 }
+
+// =============================================================================
+// PLAN CLIENT — Version épurée pour le souscripteur (un PDF par lot ciblé)
+// Calqué sur le modèle "Plan client" : pas de cotes, pas de grille UTM,
+// pas de tableau de coordonnées. Le lot du souscripteur est mis en évidence.
+// =============================================================================
+interface ClientArgs {
+  measurement: Measurement;
+  parcelle?: Parcelle | null;
+  domaine?: Domaine | null;
+  sp?: SP | null;
+  lots?: Lot[];
+  voie?: { lat: number; lng: number }[][];
+  focusLotCode?: string;
+  organisation?: string;
+  contactInfo?: string;
+}
+
+export function buildPdfClient(args: ClientArgs): Blob {
+  const {
+    measurement: m, parcelle, domaine, sp, lots = [], voie = [],
+    focusLotCode, organisation = "AgriCapital SARL",
+    contactInfo = "AgriCapital SARL, leader en solutions agricoles intégrées. Nous transformons les terres pour votre réussite.",
+  } = args;
+
+  const doc = new jsPDF({ unit: "mm", format: "a3", orientation: "landscape" });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const M = 6;
+
+  const baseRef = parcelle && domaine && sp
+    ? refOfficielle({ spCode: sp.code, domCode: domaine.code, parcCode: parcelle.code })
+    : `MES-${m.id.slice(0, 8).toUpperCase()}`;
+  const reference = focusLotCode ? `${baseRef}-${focusLotCode}` : baseRef;
+
+  // ===== EN-TÊTE =====
+  fill(doc, C.headerGreen);
+  doc.rect(0, 0, W, 20, "F");
+  try { doc.addImage(logo, "JPEG", M, 2.5, 15, 15); } catch { /* ignore */ }
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text(organisation.toUpperCase(), M + 18, 8);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+  doc.text("Promotion Agricole & Services Intégrés", M + 18, 13);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(15);
+  doc.text("PLAN DE LOTISSEMENT AGRICOLE — VERSION CLIENT", W / 2, 12, { align: "center" });
+  // Bandeau référence
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(W - M - 80, 4, 80, 12, 1.5, 1.5, "F");
+  ink(doc, C.headerGreen); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text(reference, W - M - 40, 11.5, { align: "center" });
+  doc.setTextColor(0, 0, 0);
+
+  // ===== COLONNE GAUCHE (épurée) =====
+  const top = 24, bottom = H - M;
+  const colLW = 78;
+  const lx = M;
+  let ly = top;
+
+  sectionTitle(doc, lx, ly, colLW, "APERÇU DE LA PARCELLE");
+  ly += 6;
+  const totalAreaHa = polygonAreaM2(m.points) / 10000;
+  const normalLots = lots.filter((l) => !l.isReserve);
+  const targetHa = normalLots.length > 0 ? Math.round(normalLots[0].areaM2 / 10000) || 1 : 1;
+  const aperçu: [string, string][] = [
+    ["Superficie totale", `${totalAreaHa.toFixed(2)} hectares`],
+    ["Nombre de lots", `${normalLots.length} lots (${targetHa},00 ha chacun)`],
+    ["Localisation", sp ? `${sp.name} — ${sp.departement}` : "—"],
+    ["Date du plan", new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })],
+  ];
+  if (focusLotCode) aperçu.unshift(["Lot du souscripteur", focusLotCode]);
+  ly = drawKVTable(doc, lx, ly, colLW, aperçu, 5);
+  ly += 6;
+
+  // LÉGENDE CLIENT
+  sectionTitle(doc, lx, ly, colLW, "LÉGENDE CLIENT");
+  ly += 7;
+  doc.setFontSize(7); doc.setTextColor(40, 40, 40);
+  legendLine(doc, lx + 1, ly, "line", C.parcelGreen, "Limite de Parcelle (Verte)"); ly += 5;
+  legendLine(doc, lx + 1, ly, "dashed", C.lotStroke, "Limite de Lot (Pointillée)"); ly += 5;
+  legendLine(doc, lx + 1, ly, "fill", C.roadFill, "Piste d'Accès Centrale"); ly += 5;
+  legendLine(doc, lx + 1, ly, "point", C.borneStroke, "Accès Principal"); ly += 5;
+  if (focusLotCode) {
+    doc.setFillColor(180, 220, 140); doc.setDrawColor(40, 110, 30); doc.setLineWidth(0.5);
+    doc.rect(lx + 1, ly - 1.8, 10, 2.6, "FD");
+    doc.setFontSize(7); doc.setTextColor(40, 40, 40);
+    doc.text(`Votre lot : ${focusLotCode}`, lx + 14, ly);
+    ly += 7;
+  }
+
+  // INFOS ENTREPRISE (bas)
+  const infoY = bottom - 26;
+  fill(doc, C.headerGreen); doc.rect(lx, infoY, colLW, 5, "F");
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5);
+  doc.text("INFORMATIONS ENTREPRISE", lx + colLW / 2, infoY + 3.4, { align: "center" });
+  doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+  const infoLines = doc.splitTextToSize(contactInfo, colLW - 2);
+  doc.text(infoLines, lx + 1, infoY + 9);
+
+  // ===== CENTRE — PLAN 2D ÉPURÉ =====
+  const planX = lx + colLW + 6;
+  const planY = top;
+  const planW = W - planX - M;
+  const planH = bottom - top;
+
+  doc.setDrawColor(160, 160, 160); doc.setLineWidth(0.3);
+  doc.rect(planX, planY, planW, planH);
+  doc.setFillColor(252, 252, 248);
+  doc.rect(planX + 0.5, planY + 0.5, planW - 1, planH - 1, "F");
+
+  if (m.points.length >= 3) {
+    const utmZ = utmZone(m.points[0].lng);
+    const north = m.points[0].lat >= 0;
+    const projDef = `+proj=utm +zone=${utmZ} ${north ? "+north" : "+south"} +datum=WGS84 +units=m +no_defs`;
+    const parcUtm = m.points.map((p) => proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number]);
+    const allUtm: [number, number][] = [...parcUtm];
+    for (const l of lots) for (const p of l.polygon) allUtm.push(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number]);
+    const xs = allUtm.map((p) => p[0]), ys = allUtm.map((p) => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const padL = 14, padR = 14, padT = 12, padB = 14;
+    const innerW = planW - padL - padR, innerH = planH - padT - padB;
+    const dx = Math.max(1, maxX - minX), dy = Math.max(1, maxY - minY);
+    const scale = Math.min(innerW / dx, innerH / dy);
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    const project = (x: number, y2: number): [number, number] => [
+      planX + planW / 2 + (x - cx) * scale,
+      planY + planH / 2 - (y2 - cy) * scale,
+    ];
+
+    // Lots — focus mis en évidence
+    lots.forEach((l) => {
+      if (l.polygon.length < 3) return;
+      const pts = l.polygon.map((p) => project(...(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number])));
+      const isFocus = focusLotCode && l.code === focusLotCode;
+      if (isFocus) {
+        doc.setFillColor(180, 220, 140);
+        doc.setDrawColor(40, 110, 30);
+        doc.setLineWidth(0.7);
+        doc.setLineDashPattern([], 0);
+      } else if (l.isReserve) {
+        doc.setFillColor(248, 232, 200);
+        stroke(doc, C.lotStroke);
+        doc.setLineDashPattern([0.8, 0.8], 0);
+        doc.setLineWidth(0.15);
+      } else {
+        doc.setFillColor(235, 245, 225);
+        stroke(doc, C.lotStroke);
+        doc.setLineDashPattern([0.8, 0.8], 0);
+        doc.setLineWidth(0.15);
+      }
+      drawPoly(doc, pts, "FD");
+      doc.setLineDashPattern([], 0);
+      const cx2 = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy2 = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      doc.setTextColor(isFocus ? 20 : 60, isFocus ? 80 : 60, isFocus ? 20 : 60);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+      doc.text(l.code, cx2, cy2 - 0.5, { align: "center" });
+      doc.setFontSize(7); doc.setFont("helvetica", "normal");
+      doc.text(`${(l.areaM2 / 10000).toFixed(2)} ha`.replace(".", ","), cx2, cy2 + 2.6, { align: "center" });
+    });
+
+    // Voie
+    fill(doc, C.roadFill); stroke(doc, C.roadStroke); doc.setLineWidth(0.25);
+    for (const v of voie) {
+      if (v.length < 3) continue;
+      const pts = v.map((p) => project(...(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number])));
+      drawPoly(doc, pts, "FD");
+    }
+
+    // Contour parcelle
+    stroke(doc, C.parcelGreen); doc.setLineWidth(1.1); doc.setFillColor(255, 255, 255);
+    const parcPts = parcUtm.map(([x, y2]) => project(x, y2));
+    drawPoly(doc, parcPts, "S");
+
+    // Bornes (petits cercles seulement, sans étiquettes)
+    parcPts.forEach(([x, y2]) => {
+      fill(doc, C.borneFill); stroke(doc, C.borneStroke); doc.setLineWidth(0.3);
+      doc.circle(x, y2, 0.9, "FD");
+    });
+
+    // Nord + échelle
+    drawNorth(doc, planX + 10, planY + 13);
+    drawScaleBar(doc, planX + planW - 70, planY + planH - 7, scale);
+  }
+
+  return doc.output("blob");
+}
+

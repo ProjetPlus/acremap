@@ -4,7 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { z } from "zod";
 import { MapView } from "@/components/MapView";
 import {
-  DEFAULT_GPS_CONFIG, captureStaticPoint, classifyAccuracy, estimateDeviceTier,
+  DEFAULT_GPS_CONFIG, classifyAccuracy, estimateDeviceTier,
   haversine, polygonAreaM2, polygonPerimeterM, startWatch,
 } from "@/lib/gps";
 import { db, isBrowser } from "@/lib/db";
@@ -49,7 +49,7 @@ function MeasurePage() {
   const [rejectedCount, setRejectedCount] = useState(0);
   const [acceptedCount, setAcceptedCount] = useState(0);
   const [qaHistory, setQaHistory] = useState<{ ts: number; acc: number; ok: boolean }[]>([]);
-  const [capturing, setCapturing] = useState<{ n: number; target: number; acc: number } | null>(null);
+  // Marquage instantané — pas d'état de capture progressive
   const [autoMark100, setAutoMark100] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statsOpen, setStatsOpen] = useState(true);
@@ -139,23 +139,34 @@ function MeasurePage() {
     });
   }
 
-  async function markPoint() {
+  function markPoint() {
     setError(null);
-    setCapturing({ n: 0, target: DEFAULT_GPS_CONFIG.staticSamples, acc: 999 });
-    try {
-      const p = await captureStaticPoint(DEFAULT_GPS_CONFIG, (n, target, acc) => {
-        setCapturing({ n, target, acc });
-      });
-      p.index = points.length + 1;
-      setPoints((s) => [...s, p]);
-      lastAutoRef.current = { lat: p.lat, lng: p.lng, accuracy: p.accuracy, ts: p.ts };
-      feedbackMark();
-    } catch (e: any) {
+    // Marquage INSTANTANÉ — un clic = un point ajouté immédiatement.
+    // Utilise la dernière position filtrée (Kalman) si dispo, sinon le brut.
+    // Aucun compteur d'échantillons, aucun overlay bloquant.
+    const src = filteredCur ?? current;
+    if (!src) {
       feedbackError();
-      setError(e.message ?? "Erreur de capture");
-    } finally {
-      setCapturing(null);
+      setError("Position GPS non encore reçue. Patientez quelques secondes.");
+      return;
     }
+    if (src.accuracy > DEFAULT_GPS_CONFIG.maxAcceptableAccuracy * 2) {
+      feedbackError();
+      setError(`Précision insuffisante (±${src.accuracy.toFixed(0)} m). Attendez un meilleur signal.`);
+      return;
+    }
+    const p: MeasurementPoint = {
+      index: points.length + 1,
+      samples: 1,
+      auto: false,
+      lat: src.lat,
+      lng: src.lng,
+      accuracy: src.accuracy,
+      ts: Date.now(),
+    };
+    setPoints((s) => [...s, p]);
+    lastAutoRef.current = { lat: p.lat, lng: p.lng, accuracy: p.accuracy, ts: p.ts };
+    feedbackMark();
   }
 
   function undo() {
@@ -336,7 +347,7 @@ function MeasurePage() {
         <div className="flex gap-1.5 items-stretch">
           <button
             onClick={markPoint}
-            disabled={!running || !!capturing || paused}
+            disabled={!running || paused}
             className="flex-1 h-14 rounded-2xl bg-accent text-accent-foreground font-bold shadow-elevated disabled:opacity-40 flex flex-col items-center justify-center gap-0.5"
           >
             <MapPin className="w-5 h-5" />
@@ -407,20 +418,7 @@ function MeasurePage() {
         </div>
       )}
 
-      {/* OVERLAY CAPTURE STATIQUE */}
-      {capturing && (
-        <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-[1000]">
-          <div className="bg-card p-6 rounded-2xl max-w-xs text-center shadow-elevated">
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Capture statique</div>
-            <div className="text-3xl font-bold text-primary mt-2">{capturing.n} / {capturing.target}</div>
-            <div className="text-xs text-muted-foreground mt-1">±{capturing.acc.toFixed(1)} m</div>
-            <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-primary transition-all" style={{ width: `${(capturing.n / capturing.target) * 100}%` }} />
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-3">Restez immobile.</p>
-          </div>
-        </div>
-      )}
+      {/* Marquage instantané — pas d'overlay de capture */}
 
       {/* DRAWER OPTIONS */}
       {optionsOpen && (

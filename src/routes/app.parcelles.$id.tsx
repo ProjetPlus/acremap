@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapView } from "@/components/MapView";
 import { db, isBrowser } from "@/lib/db";
 import { useAuth, hasRole } from "@/lib/auth";
@@ -10,8 +10,9 @@ import { partagerParcelle, type Axis } from "@/lib/partage";
 import { genererVoie } from "@/lib/voie";
 import { refOfficielle } from "@/lib/ref";
 import { downloadBlob, toCSV, toGeoJSON, toKML } from "@/lib/export";
-import { buildGeometrePdf } from "@/lib/pdf";
+import { buildGeometrePdf, buildPdfClient } from "@/lib/pdf";
 import { buildDxf } from "@/lib/dxf";
+import JSZip from "jszip";
 import { buildShapefileZip } from "@/lib/shp";
 import { DEFAULT_GPS_CONFIG, haversine, polygonAreaM2, polygonPerimeterM } from "@/lib/gps";
 import type { DeviceProfile, Domaine, GpsPoint, Lot, MeasurementPoint, MeasurementQA, Parcelle, SP } from "@/lib/types";
@@ -94,6 +95,10 @@ function ParcDetail() {
   const [voieOn, setVoieOn] = useState(false);
   const [voieAxis, setVoieAxis] = useState<Axis>("horizontal");
   const [voieWidth, setVoieWidth] = useState(4);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewVariant, setPreviewVariant] = useState<"entreprise" | "client">("entreprise");
+  const [previewFocusLot, setPreviewFocusLot] = useState<string>("");
+  const [previewUrl, setPreviewUrl] = useState<string>("");
 
   const data = useLiveQuery(async () => {
     if (!isBrowser()) return undefined;
@@ -160,6 +165,29 @@ function ParcDetail() {
     }
     return { lots: allLots, totalAreaM2: total, strictValid, errors, lotAreaTargetM2: lotHa * 10_000 };
   }, [data?.m, morcSources, voieResult, lotHa, morcAxis]);
+
+  // Génération à la volée du PDF d'aperçu (mode entreprise ou client)
+  useEffect(() => {
+    if (!previewOpen || !data?.m) return;
+    const voiePolys = voieResult ? voieResult.voie : [];
+    let blob: Blob;
+    if (previewVariant === "client") {
+      blob = buildPdfClient({
+        measurement: data.m, parcelle: data.parc ?? null, domaine: data.dom ?? null, sp: data.sp ?? null,
+        lots: data.lots, voie: voiePolys, focusLotCode: previewFocusLot || undefined,
+      });
+    } else {
+      blob = buildGeometrePdf({
+        measurement: data.m, parcelle: data.parc ?? null, domaine: data.dom ?? null, sp: data.sp ?? null,
+        lots: data.lots, voie: voiePolys, operatorName: user?.fullName ?? "—",
+      });
+    }
+    const url = URL.createObjectURL(blob);
+    setPreviewUrl(url);
+    return () => { URL.revokeObjectURL(url); };
+  }, [previewOpen, previewVariant, previewFocusLot, data, voieResult, user?.fullName]);
+
+
 
 
   if (data === undefined) return <div className="p-8 text-center text-muted-foreground">Chargement…</div>;
@@ -244,8 +272,42 @@ function ParcDetail() {
       lots, voie: voiePolys, operatorName: user?.fullName ?? "—",
     });
     const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
-    downloadBlob(blob, `${base}-plan-geometre.pdf`, "application/pdf");
+    downloadBlob(blob, `${base}-plan-entreprise.pdf`, "application/pdf");
   }
+
+  function exportPdfClientLot(lotCode: string) {
+    const voiePolys = voieResult ? voieResult.voie : [];
+    const blob = buildPdfClient({
+      measurement: m!, parcelle: parc ?? null, domaine: dom ?? null, sp: sp ?? null,
+      lots, voie: voiePolys, focusLotCode: lotCode,
+    });
+    const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
+    downloadBlob(blob, `${base}-plan-client-${lotCode}.pdf`, "application/pdf");
+  }
+
+  async function exportAllClientsZip() {
+    const voiePolys = voieResult ? voieResult.voie : [];
+    const subscribers = lots.filter((l) => !l.isReserve);
+    if (subscribers.length === 0) { alert("Aucun lot souscripteur à exporter."); return; }
+    const zip = new JSZip();
+    const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
+    for (const l of subscribers) {
+      const blob = buildPdfClient({
+        measurement: m!, parcelle: parc ?? null, domaine: dom ?? null, sp: sp ?? null,
+        lots, voie: voiePolys, focusLotCode: l.code,
+      });
+      zip.file(`${base}-plan-client-${l.code}.pdf`, blob);
+    }
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    downloadBlob(zipBlob, `${base}-plans-clients.zip`, "application/zip");
+  }
+
+  function openPreview(variant: "entreprise" | "client", focusLot?: string) {
+    setPreviewVariant(variant);
+    setPreviewFocusLot(focusLot ?? (lots.find((l) => !l.isReserve)?.code ?? ""));
+    setPreviewOpen(true);
+  }
+
 
   // Calcul des segments (distance par côté)
   const segments = m.points.map((p, i) => {
@@ -453,12 +515,20 @@ function ParcDetail() {
                       {lots.map((l) => (
                         <tr key={l.id} className="border-t">
                           <td className="p-1.5 font-mono">{l.code}{l.isReserve ? " · Réserve" : ""}</td>
-                          <td className="p-1.5 text-right">{l.isReserve ? formatArea(l.areaM2) : `${l.areaM2 / 10_000} ha`}</td>
+                          <td className="p-1.5 text-right">{l.isReserve ? formatArea(l.areaM2) : `${(l.areaM2 / 10_000).toFixed(2).replace(".", ",")} ha`}</td>
                           <td className="p-1.5">
-                            <button onClick={() => assignLot(l.id)}
-                              className="text-left text-primary hover:underline truncate max-w-[120px]">
-                              {l.assigneeName ?? "+ assigner"}
-                            </button>
+                            <div className="flex items-center justify-between gap-1">
+                              <button onClick={() => assignLot(l.id)}
+                                className="text-left text-primary hover:underline truncate max-w-[100px]">
+                                {l.assigneeName ?? "+ assigner"}
+                              </button>
+                              {!l.isReserve && (
+                                <button onClick={() => exportPdfClientLot(l.code)} title={`PDF client — ${l.code}`}
+                                  className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent hover:bg-accent/20 font-semibold">
+                                  PDF
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -490,10 +560,24 @@ function ParcDetail() {
           </div>
 
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold">Exports</h3>
+            <h3 className="text-sm font-semibold">Exports & impression</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => openPreview("entreprise")}
+                className="h-11 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1">
+                👁 Aperçu entreprise
+              </button>
+              <button onClick={() => openPreview("client")} disabled={lots.filter(l => !l.isReserve).length === 0}
+                className="h-11 rounded-lg bg-accent text-accent-foreground text-xs font-semibold flex items-center justify-center gap-1 disabled:opacity-40">
+                👁 Aperçu client
+              </button>
+            </div>
             <button onClick={exportPdf}
-              className="w-full h-11 rounded-lg bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2">
-              📄 Document de travail géomètre (PDF)
+              className="w-full h-10 rounded-lg border border-primary text-primary text-xs font-semibold flex items-center justify-center gap-2">
+              📄 PDF Plan Entreprise (avec cotes & coordonnées)
+            </button>
+            <button onClick={exportAllClientsZip} disabled={lots.filter(l => !l.isReserve).length === 0}
+              className="w-full h-10 rounded-lg border border-accent text-accent text-xs font-semibold flex items-center justify-center gap-2 disabled:opacity-40">
+              📦 Tous les plans clients (ZIP — 1 PDF par lot)
             </button>
             <div className="grid grid-cols-3 gap-2">
               <button onClick={() => exportAs("dxf")} className="h-10 rounded-md border text-xs font-semibold hover:bg-muted">DXF (AutoCAD)</button>
@@ -503,7 +587,7 @@ function ParcDetail() {
               <button onClick={() => exportAs("csv")} className="h-10 rounded-md border text-xs font-medium hover:bg-muted">CSV points</button>
             </div>
             <div className="text-[10px] text-muted-foreground">
-              PDF mono-page A3 paysage (plan UTM, lots, voie, bornes A1..An, légende, coordonnées). DXF par calques (PARCELLE/LOTS/VOIE/BORNES). Shapefile zip (polygones + attributs).
+              <b>Entreprise</b> : plan A3 avec grille UTM, cotes des côtés, coordonnées des bornes. <b>Client</b> : version épurée, un PDF par souscripteur mettant en évidence son lot.
             </div>
           </div>
 
@@ -526,6 +610,54 @@ function ParcDetail() {
           </div>
         </div>
       </aside>
+
+      {/* APERÇU AVANT IMPRESSION */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-[2000] bg-black/70 flex flex-col" onClick={() => setPreviewOpen(false)}>
+          <div className="bg-card p-3 flex items-center gap-2 border-b" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-bold text-sm">Aperçu avant impression</h2>
+            <div className="ml-3 flex items-center gap-1.5 text-xs">
+              <button onClick={() => setPreviewVariant("entreprise")}
+                className={`px-2.5 py-1 rounded ${previewVariant === "entreprise" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                Entreprise
+              </button>
+              <button onClick={() => setPreviewVariant("client")}
+                className={`px-2.5 py-1 rounded ${previewVariant === "client" ? "bg-accent text-accent-foreground" : "bg-muted"}`}>
+                Client
+              </button>
+              {previewVariant === "client" && (
+                <select value={previewFocusLot} onChange={(e) => setPreviewFocusLot(e.target.value)}
+                  className="px-2 py-1 rounded border bg-background text-xs">
+                  {lots.filter(l => !l.isReserve).map(l => (
+                    <option key={l.id} value={l.code}>Lot {l.code}{l.assigneeName ? ` — ${l.assigneeName}` : ""}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="flex-1" />
+            <button onClick={() => {
+              if (previewVariant === "client") exportPdfClientLot(previewFocusLot);
+              else exportPdf();
+            }} className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-semibold">
+              Télécharger PDF
+            </button>
+            <button onClick={() => {
+              const iframe = document.getElementById("pdf-preview-iframe") as HTMLIFrameElement | null;
+              iframe?.contentWindow?.print();
+            }} className="px-3 py-1.5 rounded bg-accent text-accent-foreground text-xs font-semibold">
+              Imprimer
+            </button>
+            <button onClick={() => setPreviewOpen(false)} className="px-3 py-1.5 rounded border text-xs">Fermer</button>
+          </div>
+          <div className="flex-1 bg-muted" onClick={(e) => e.stopPropagation()}>
+            {previewUrl ? (
+              <iframe id="pdf-preview-iframe" src={previewUrl} title="Aperçu PDF" className="w-full h-full border-0" />
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Génération du PDF…</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

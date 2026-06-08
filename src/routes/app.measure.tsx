@@ -139,23 +139,34 @@ function MeasurePage() {
     });
   }
 
-  async function markPoint() {
+  function markPoint() {
     setError(null);
-    setCapturing({ n: 0, target: DEFAULT_GPS_CONFIG.staticSamples, acc: 999 });
-    try {
-      const p = await captureStaticPoint(DEFAULT_GPS_CONFIG, (n, target, acc) => {
-        setCapturing({ n, target, acc });
-      });
-      p.index = points.length + 1;
-      setPoints((s) => [...s, p]);
-      lastAutoRef.current = { lat: p.lat, lng: p.lng, accuracy: p.accuracy, ts: p.ts };
-      feedbackMark();
-    } catch (e: any) {
+    // Marquage INSTANTANÉ — un clic = un point ajouté immédiatement.
+    // Utilise la dernière position filtrée (Kalman) si dispo, sinon le brut.
+    // Aucun compteur d'échantillons, aucun overlay bloquant.
+    const src = filteredCur ?? current;
+    if (!src) {
       feedbackError();
-      setError(e.message ?? "Erreur de capture");
-    } finally {
-      setCapturing(null);
+      setError("Position GPS non encore reçue. Patientez quelques secondes.");
+      return;
     }
+    if (src.accuracy > DEFAULT_GPS_CONFIG.maxAcceptableAccuracy * 2) {
+      feedbackError();
+      setError(`Précision insuffisante (±${src.accuracy.toFixed(0)} m). Attendez un meilleur signal.`);
+      return;
+    }
+    const p: MeasurementPoint = {
+      index: points.length + 1,
+      samples: 1,
+      auto: false,
+      lat: src.lat,
+      lng: src.lng,
+      accuracy: src.accuracy,
+      ts: Date.now(),
+    };
+    setPoints((s) => [...s, p]);
+    lastAutoRef.current = { lat: p.lat, lng: p.lng, accuracy: p.accuracy, ts: p.ts };
+    feedbackMark();
   }
 
   function undo() {

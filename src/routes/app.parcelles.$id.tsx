@@ -249,8 +249,42 @@ function ParcDetail() {
       lots, voie: voiePolys, operatorName: user?.fullName ?? "—",
     });
     const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
-    downloadBlob(blob, `${base}-plan-geometre.pdf`, "application/pdf");
+    downloadBlob(blob, `${base}-plan-entreprise.pdf`, "application/pdf");
   }
+
+  function exportPdfClientLot(lotCode: string) {
+    const voiePolys = voieResult ? voieResult.voie : [];
+    const blob = buildPdfClient({
+      measurement: m!, parcelle: parc ?? null, domaine: dom ?? null, sp: sp ?? null,
+      lots, voie: voiePolys, focusLotCode: lotCode,
+    });
+    const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
+    downloadBlob(blob, `${base}-plan-client-${lotCode}.pdf`, "application/pdf");
+  }
+
+  async function exportAllClientsZip() {
+    const voiePolys = voieResult ? voieResult.voie : [];
+    const subscribers = lots.filter((l) => !l.isReserve);
+    if (subscribers.length === 0) { alert("Aucun lot souscripteur à exporter."); return; }
+    const zip = new JSZip();
+    const base = parc?.code ?? `mesure-${m!.id.slice(0, 6)}`;
+    for (const l of subscribers) {
+      const blob = buildPdfClient({
+        measurement: m!, parcelle: parc ?? null, domaine: dom ?? null, sp: sp ?? null,
+        lots, voie: voiePolys, focusLotCode: l.code,
+      });
+      zip.file(`${base}-plan-client-${l.code}.pdf`, blob);
+    }
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    downloadBlob(zipBlob, `${base}-plans-clients.zip`, "application/zip");
+  }
+
+  function openPreview(variant: "entreprise" | "client", focusLot?: string) {
+    setPreviewVariant(variant);
+    setPreviewFocusLot(focusLot ?? (lots.find((l) => !l.isReserve)?.code ?? ""));
+    setPreviewOpen(true);
+  }
+
 
   // Calcul des segments (distance par côté)
   const segments = m.points.map((p, i) => {

@@ -4,7 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { z } from "zod";
 import { MapView } from "@/components/MapView";
 import {
-  DEFAULT_GPS_CONFIG, captureStaticPoint, classifyAccuracy, estimateDeviceTier,
+  DEFAULT_GPS_CONFIG, classifyAccuracy, estimateDeviceTier,
   haversine, polygonAreaM2, polygonPerimeterM, startWatch,
 } from "@/lib/gps";
 import { db, isBrowser } from "@/lib/db";

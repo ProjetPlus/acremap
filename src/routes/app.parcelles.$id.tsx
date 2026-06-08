@@ -515,12 +515,20 @@ function ParcDetail() {
                       {lots.map((l) => (
                         <tr key={l.id} className="border-t">
                           <td className="p-1.5 font-mono">{l.code}{l.isReserve ? " · Réserve" : ""}</td>
-                          <td className="p-1.5 text-right">{l.isReserve ? formatArea(l.areaM2) : `${l.areaM2 / 10_000} ha`}</td>
+                          <td className="p-1.5 text-right">{l.isReserve ? formatArea(l.areaM2) : `${(l.areaM2 / 10_000).toFixed(2).replace(".", ",")} ha`}</td>
                           <td className="p-1.5">
-                            <button onClick={() => assignLot(l.id)}
-                              className="text-left text-primary hover:underline truncate max-w-[120px]">
-                              {l.assigneeName ?? "+ assigner"}
-                            </button>
+                            <div className="flex items-center justify-between gap-1">
+                              <button onClick={() => assignLot(l.id)}
+                                className="text-left text-primary hover:underline truncate max-w-[100px]">
+                                {l.assigneeName ?? "+ assigner"}
+                              </button>
+                              {!l.isReserve && (
+                                <button onClick={() => exportPdfClientLot(l.code)} title={`PDF client — ${l.code}`}
+                                  className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent hover:bg-accent/20 font-semibold">
+                                  PDF
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}

@@ -238,16 +238,27 @@ export function buildGeometrePdf(args: BuildArgs): Blob {
       doc.text(`${gy.toFixed(0)}`, planX + planW - 1, py, { align: "right", baseline: "middle" });
     }
 
-    // Lots (vert clair uniforme)
+    // Lots (vert clair uniforme) — avec étiquettes de longueur des côtés
     doc.setLineWidth(0.15);
     lots.forEach((l) => {
       if (l.polygon.length < 3) return;
       const pts = l.polygon.map((p) => project(...(proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number])));
+      const ptsUtm = l.polygon.map((p) => proj4("WGS84", projDef, [p.lng, p.lat]) as [number, number]);
       doc.setFillColor(...(l.isReserve ? [248, 232, 200] as const : C.lotFill));
       stroke(doc, C.lotStroke);
       doc.setLineDashPattern([0.8, 0.8], 0);
       drawPoly(doc, pts, "FD");
       doc.setLineDashPattern([], 0);
+      // Étiquettes de longueur (en mètres réels — distance UTM)
+      doc.setFontSize(4.8); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        const au = ptsUtm[i], bu = ptsUtm[(i + 1) % pts.length];
+        const lenM = Math.hypot(bu[0] - au[0], bu[1] - au[1]);
+        if (lenM < 3) continue;
+        const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+        doc.text(`${lenM.toFixed(2)} m`.replace(".", ","), mx, my, { align: "center", baseline: "middle" });
+      }
       const cx2 = pts.reduce((s, p) => s + p[0], 0) / pts.length;
       const cy2 = pts.reduce((s, p) => s + p[1], 0) / pts.length;
       doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "bold"); doc.setFontSize(8);

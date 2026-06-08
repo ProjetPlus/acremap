@@ -95,6 +95,10 @@ function ParcDetail() {
   const [voieOn, setVoieOn] = useState(false);
   const [voieAxis, setVoieAxis] = useState<Axis>("horizontal");
   const [voieWidth, setVoieWidth] = useState(4);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewVariant, setPreviewVariant] = useState<"entreprise" | "client">("entreprise");
+  const [previewFocusLot, setPreviewFocusLot] = useState<string>("");
+  const [previewUrl, setPreviewUrl] = useState<string>("");
 
   const data = useLiveQuery(async () => {
     if (!isBrowser()) return undefined;

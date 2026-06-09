@@ -13,6 +13,7 @@ interface Props {
   current?: MapPoint | null;        // current GPS position
   currentAccuracy?: number;
   satellite?: boolean;
+  schematic?: boolean;              // vue schématique (fond uni, pas de tuiles)
   lots?: { code: string; polygon: MapPoint[] }[];
   className?: string;
   onMapClick?: (p: MapPoint) => void;

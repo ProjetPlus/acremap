@@ -13,6 +13,7 @@ interface Props {
   current?: MapPoint | null;        // current GPS position
   currentAccuracy?: number;
   satellite?: boolean;
+  schematic?: boolean;              // vue schématique (fond uni, pas de tuiles)
   lots?: { code: string; polygon: MapPoint[] }[];
   className?: string;
   onMapClick?: (p: MapPoint) => void;
@@ -46,7 +47,7 @@ export function MapView(props: Props) {
         attributionControl: true,
       });
       mapRef.current = map;
-      addTile(map, props.satellite);
+      addTile(map, props.satellite, props.schematic);
       bindClick(map);
       sync();
     })();
@@ -54,19 +55,29 @@ export function MapView(props: Props) {
     // eslint-disable-next-line
   }, []);
 
-  // satellite toggle
+  // satellite/schematic toggle
   useEffect(() => {
     if (!mapRef.current) return;
     if (layersRef.current.tile) mapRef.current.removeLayer(layersRef.current.tile);
-    addTile(mapRef.current, props.satellite);
-  }, [props.satellite]);
+    addTile(mapRef.current, props.satellite, props.schematic);
+  }, [props.satellite, props.schematic]);
 
-  function addTile(map: LMap, satellite?: boolean) {
+  function addTile(map: LMap, satellite?: boolean, schematic?: boolean) {
     import("leaflet").then(({ default: L }) => {
-      // Satellite "hybride" : Google Hybrid (s,h) — imagerie haute résolution + libellés
-      // Repli automatique sur Esri World Imagery + Esri Reference (labels) en cas d'échec
       const group = L.layerGroup();
-      if (satellite) {
+      // Apply / clear schematic background on the map container
+      const container = map.getContainer();
+      if (schematic) {
+        container.style.backgroundColor = "#F5F1E8";
+        container.style.backgroundImage = "linear-gradient(#e5dfce 1px, transparent 1px), linear-gradient(90deg, #e5dfce 1px, transparent 1px)";
+        container.style.backgroundSize = "32px 32px";
+      } else {
+        container.style.backgroundImage = "";
+        container.style.backgroundColor = "";
+      }
+      if (schematic) {
+        // pas de tuiles
+      } else if (satellite) {
         const google = L.tileLayer(
           "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
           { subdomains: ["0", "1", "2", "3"], maxZoom: 21, maxNativeZoom: 21,

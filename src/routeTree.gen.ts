@@ -18,6 +18,7 @@ import { Route as AppUsersRouteImport } from './routes/app.users'
 import { Route as AppMeasureRouteImport } from './routes/app.measure'
 import { Route as AppHierarchieRouteImport } from './routes/app.hierarchie'
 import { Route as AppDebugRouteImport } from './routes/app.debug'
+import { Route as AppChangePasswordRouteImport } from './routes/app.change-password'
 import { Route as AppParcellesIndexRouteImport } from './routes/app.parcelles.index'
 import { Route as AppParcellesNewRouteImport } from './routes/app.parcelles.new'
 import { Route as AppParcellesIdRouteImport } from './routes/app.parcelles.$id'
@@ -67,6 +68,11 @@ const AppDebugRoute = AppDebugRouteImport.update({
   path: '/debug',
   getParentRoute: () => AppRoute,
 } as any)
+const AppChangePasswordRoute = AppChangePasswordRouteImport.update({
+  id: '/change-password',
+  path: '/change-password',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppParcellesIndexRoute = AppParcellesIndexRouteImport.update({
   id: '/parcelles/',
   path: '/parcelles/',
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/measure': typeof AppMeasureRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/measure': typeof AppMeasureRoute
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/measure': typeof AppMeasureRoute
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/login'
+    | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
     | '/app/measure'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
     | '/app/measure'
@@ -158,6 +169,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/login'
+    | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
     | '/app/measure'
@@ -240,6 +252,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDebugRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/change-password': {
+      id: '/app/change-password'
+      path: '/change-password'
+      fullPath: '/app/change-password'
+      preLoaderRoute: typeof AppChangePasswordRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/parcelles/': {
       id: '/app/parcelles/'
       path: '/parcelles'
@@ -265,6 +284,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppChangePasswordRoute: typeof AppChangePasswordRoute
   AppDebugRoute: typeof AppDebugRoute
   AppHierarchieRoute: typeof AppHierarchieRoute
   AppMeasureRoute: typeof AppMeasureRoute
@@ -277,6 +297,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppChangePasswordRoute: AppChangePasswordRoute,
   AppDebugRoute: AppDebugRoute,
   AppHierarchieRoute: AppHierarchieRoute,
   AppMeasureRoute: AppMeasureRoute,
@@ -298,13 +319,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

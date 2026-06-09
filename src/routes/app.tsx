@@ -25,7 +25,13 @@ function AppLayout() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [notifPerm, setNotifPerm] = useState<string>("default");
 
-  useEffect(() => { if (hydrated && !user) nav({ to: "/login" }); }, [hydrated, user, nav]);
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!user) { nav({ to: "/login" }); return; }
+    if (user.mustChangePassword && path !== "/app/change-password") {
+      nav({ to: "/app/change-password" });
+    }
+  }, [hydrated, user, nav, path]);
 
   // Service Worker — désactivé dans les iframes / previews Lovable
   useEffect(() => {
@@ -49,6 +55,7 @@ function AppLayout() {
   if (!hydrated || !user) return null;
   const items = NAV.filter((n) => !n.admin || user.role === "admin");
   const isMeasureRoute = path === "/app/measure";
+  const handleSignOut = async () => { await signOut(); nav({ to: "/login" }); };
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-muted/30">

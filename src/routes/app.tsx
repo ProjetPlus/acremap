@@ -97,7 +97,7 @@ function AppLayout() {
             <div className="font-semibold text-sidebar-foreground">{user.fullName}</div>
             <div className="text-sidebar-foreground/60 capitalize">{user.role}</div>
           </div>
-          <button onClick={() => { signOut(); nav({ to: "/login" }); }}
+          <button onClick={handleSignOut}
             className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-sidebar-accent text-sidebar-foreground/85">
             Déconnexion
           </button>
@@ -111,7 +111,7 @@ function AppLayout() {
             <button onClick={async () => setNotifPerm(await requestNotificationPermission())}
               className="text-xs px-2.5 py-1.5 rounded-md bg-warn/20 text-warn border border-warn/30">🔔</button>
           )}
-          <button onClick={() => { signOut(); nav({ to: "/login" }); }}
+          <button onClick={handleSignOut}
             className="text-xs px-3 py-1.5 rounded-md border">Sortie</button>
         </div>
       </header>

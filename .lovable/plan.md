@@ -1,61 +1,71 @@
-# Plan — Lot 5 : Plans 2D conformes, aperçu, export par lot, levé instantané
 
-## 1. Levé instantané (suppression du compteur 1/30)
+# Plan — AcreMap V1 Production : migration cloud + modules restants
 
-Fichier : `src/routes/app.measure.tsx`
-- Supprimer toute logique de comptage d'échantillons visible lors d'un appui sur **Marquer**.
-- Au clic sur **Marquer un point** : capture immédiate d'UNE position GPS (la dernière reçue par `watchPosition`), ajout instantané au polygone, aucun overlay « 1/30 », aucune attente.
-- Le filtre qualité (précision max, rejet anti-dérive immobile) reste actif en arrière-plan mais n'apparaît plus dans l'UI au moment du marquage.
-- Toujours masquer le bouton « Terminer » uniquement après ≥ 3 points valides.
+Le cahier des charges est largement couvert (mesure GPS, morcellement strict 1 ha, PDF entreprise/client, exports DXF/KML/SHP/GeoJSON, validation, hiérarchie SP/Domaine/Parcelle). Restent 4 chantiers majeurs pour atteindre la version production. Je propose de les faire dans cet ordre car chacun débloque le suivant.
 
-## 2. Références claires des lots après morcellement
+## Chantier 1 — Supabase = source de vérité, IndexedDB = cache offline
 
-Fichier : `src/lib/morcellement.ts`
-- Pour chaque lot `H01..Hnn`, générer les bornes avec étiquettes séquentielles **par lot** au format `H01-P1, H01-P2, …` qui correspondent aux sommets du polygone dans l'ordre de tracé.
-- Ajouter `edges: { from: "H01-P1", to: "H01-P2", lengthM: 23.31 }` pour chaque côté → permet d'imprimer les longueurs sur le plan et de « revenir » à n'importe quel segment.
-- Numéroter aussi les bornes globales de la parcelle `A1..An` (déjà fait) ET garder un mapping `Hxx-Pk ↔ Ay` quand le sommet du lot coïncide avec une borne de parcelle.
+C'est le plus important. Aujourd'hui toutes les données vivent dans le navigateur (IndexedDB). En production : un agent perd son téléphone = données perdues, et le superviseur ne voit rien.
 
-## 3. Plan PDF « ENTREPRISE » (modèle Plan 1)
+**Cible :**
+- Supabase devient la base principale (tables `sps`, `domaines`, `parcelles`, `measurements`, `lots`, `voies`, `partages` déjà présentes).
+- IndexedDB ne sert plus que de cache offline + file d'attente d'écritures (outbox pattern).
+- Toute écriture : 1) écrit dans IndexedDB + marque `pendingSync=true`, 2) si online, pousse vers Supabase et démarque, 3) si offline, retentera à la reconnexion.
+- Toute lecture : tente Supabase en premier ; si offline, tombe sur IndexedDB.
+- Sauvegarde locale toutes les 30 s en cours de mesure (§10.2 du cahier des charges).
 
-Refonte `src/lib/pdf.ts` → `exportPdfEntreprise(...)`
-A3 paysage, 3 colonnes :
-- **Colonne gauche** : logo AgriCapital + bloc vert « PLAN DE MORCELLEMENT PARCELLE AGRICOLE » + référence officielle, Informations générales, Tableau des superficies (brute / piste / nette / nb lots / moyenne), Localisation (mini-carte), Notes, Dressé par.
-- **Centre** : plan 2D avec grille UTM (X en haut/bas, Y gauche/droite), rose des vents, polygone parcelle vert, voie centrale beige, lots H01..Hnn avec étiquette + « 1,00 ha », **longueurs des côtés des lots** affichées sur chaque segment (m), points A1..An, échelle graphique 1/2500.
-- **Colonne droite** : Légende, Tableau des lots (N° / Référence officielle / Superficie 1,00 ha), Coordonnées UTM des points A1..An (X,Y en mètres), Remarques importantes.
+**Implémentation :**
+- Nouveau `src/lib/repo/*` — un fichier par entité (`parcelles.ts`, `measurements.ts`, …) avec API unique `list/get/upsert/remove` qui orchestre Supabase + Dexie.
+- Hook `useOnlineStatus` + `src/lib/sync.ts` — vide la file d'attente quand `navigator.onLine` repasse à true (event `online`).
+- Migration des données existantes : bouton "Importer mes mesures locales vers le cloud" sur `/app/debug` (ne touche pas aux IDs).
 
-## 4. Plan PDF « CLIENT » (modèle Plan client) — un par lot
+**Schéma Supabase** : audit + ajout des colonnes manquantes (`owner_photo`, `group_photo`, `parcelle_photo` pour stockage base64 ou bucket, `device_profile`, `qa` JSON pour mesures, `bornes`, `is_reserve` pour lots). Migration unique.
 
-Nouveau : `exportPdfClient({ measurement, parcelle, lots, focusLotCode })`
-A3 paysage, épuré :
-- **Colonne gauche** : logo, titre vert « PLAN DE LOTISSEMENT AGRICOLE – VERSION CLIENT », référence officielle du **lot ciblé** `AC-PP-…-PARC001-H07`, Aperçu de la parcelle (Superficie totale, Nb lots, Localisation, Date), Légende client (4 entrées), bloc Informations entreprise.
-- **Centre** : même plan 2D que entreprise mais **sans cotes** ni grille UTM ni coordonnées ; le lot ciblé est mis en évidence (remplissage vert clair + bordure plus épaisse) ; les autres lots restent visibles en gris clair pour le contexte.
-- **Pas de tableau de coordonnées, pas de longueurs**, juste l'échelle graphique 1/2500 en bas à droite.
+## Chantier 2 — Gestion utilisateurs (Module §9)
 
-Boucle d'export par lot : `for (const lot of lots) exportPdfClient({..., focusLotCode: lot.code})` → un PDF par souscripteur (`Plan-Client-AC-PP-SP001-DOM001-PARC001-H07.pdf`).
+**Cible :** seul l'admin crée des comptes ; nouveau compte = mot de passe temporaire ; à la 1ère connexion, l'utilisateur DOIT changer son mot de passe.
 
-## 5. Aperçu avant impression dans le détail de parcelle
+**Implémentation :**
+- Server fn `createUserAccount` (admin only, via `requireSupabaseAuth` + `has_role('admin')`, utilise `supabaseAdmin.auth.admin.createUser`) — renvoie identifiant + mot de passe temporaire en clair (affiché 1 fois).
+- Champ `profiles.must_change_password` (booléen, défaut `true` à la création admin).
+- Au login : si `must_change_password=true`, redirige vers `/app/change-password` avant tout accès.
+- Refonte `src/routes/app.users.tsx` : liste, création, désactivation, attribution de rôle (`admin`/`agent`/`viewer`).
+- `src/routes/login.tsx` : retirer toute trace d'inscription publique ; design conforme §2.1 (logo + tagline + form).
 
-`src/routes/app.parcelles.$id.tsx`
-- Nouveau bouton **« Aperçu avant impression »** ouvre un `Dialog` plein écran.
-- Le dialog rend le PDF entreprise via `jsPDF` → `dataURIString()` dans un `<iframe>` (aperçu fidèle au PDF final).
-- Sélecteur de variante : **Entreprise** / **Client (par lot)** + dropdown du lot.
-- Actions : `Imprimer` (window.print de l'iframe), `Télécharger PDF`, `Fermer`.
+## Chantier 3 — Cartographie satellite ↔ schématique (Module §7)
 
-## 6. Exports par lot — boutons supplémentaires
+**Cible :** chaque vue (liste parcelles, détail parcelle, hiérarchie) propose le toggle.
+- `src/components/MapView.tsx` : ajouter prop `mode: "satellite" | "schematic"` + bouton flottant de bascule.
+  - Satellite : tile ESRI World Imagery (déjà la base).
+  - Schématique : fond uni clair + polygones colorés, voies, étiquettes lots — pas de tuiles.
+- Vue par niveau hiérarchique : `/app/hierarchie` affiche tous les domaines d'une SP, ou toutes les parcelles d'un domaine, sur une seule carte.
 
-Dans le détail parcelle, section morcellement :
-- Bouton **« Tous les plans clients (ZIP) »** → génère un PDF par lot et empaquette via `JSZip` (déjà installé indirectement avec `shp-write` ? sinon `bun add jszip`).
-- Boutons existants DXF/GeoJSON/KML/SHP inchangés.
+## Chantier 4 — Exports PNG + niveaux hiérarchiques (Module §8)
 
-## Acceptance
-- Marquage GPS : clic → point ajouté, **aucun** indicateur « x/30 ».
-- Chaque lot strict 1,00 ha (déjà garanti par `morcelerStrict`).
-- PDF entreprise visuellement aligné sur Plan_1.png.
-- PDF client visuellement aligné sur Plan_client.png, un par lot, mettant en évidence le lot du souscripteur.
-- Aperçu avant impression fonctionnel dans le détail parcelle.
-- Coordonnées UTM du tableau = coordonnées projetées des points A1..An réellement levés.
+**Cible :**
+- Export PNG haute résolution (jsPDF + `html2canvas` ou rendu canvas direct) en plus du PDF, pour chaque niveau.
+- Boutons d'export sur SP / Domaine / Parcelle / Lot (pas seulement parcelle).
+- Format A4 + A3 + A2 sélectionnable.
+
+**Implémentation :**
+- Refactor `src/lib/pdf.ts` → `src/lib/render/` avec fonctions partagées (entête, légende, plan 2D) consommables par PDF et PNG.
+- Boutons "PNG" à côté des boutons PDF existants.
+
+## Ordre d'exécution proposé
+
+1. **Chantier 1** — fondations cloud (1 migration SQL + repo + sync).
+2. **Chantier 2** — gestion utilisateurs (bloque la mise en production sans).
+3. **Chantier 3** — toggle satellite/schématique (rapide, valeur visuelle).
+4. **Chantier 4** — PNG + niveaux d'export (le plus volumineux mais le moins bloquant).
+
+Chaque chantier sera livré avec ses propres tests visuels (preview).
 
 ## Notes techniques
-- Projection UTM : déjà via `proj4` dans `src/lib/dxf.ts` → factoriser dans `src/lib/utm.ts` partagé par DXF et PDF pour cohérence stricte X/Y.
-- Longueurs des segments : calcul Haversine entre points consécutifs (déjà dans `src/lib/gps.ts`).
-- Pas de changement de schéma Supabase.
+
+- **PWA offline** : la PWA est déjà présente (`public/sw.js`, `manifest.webmanifest`). Pas de refonte ; juste ajout du listener `online`/`offline` + outbox.
+- **Photos** : stockage actuel en base64 dans IndexedDB. Migration vers bucket Supabase Storage `parcelle-photos` (privé, RLS par owner).
+- **Pas de changement** côté mesure GPS, morcellement, PDF déjà fonctionnels.
+
+## Demande de validation
+
+Ce plan représente ~1500-2000 lignes de code modifiées/ajoutées et 1 migration SQL non-triviale. Veux-tu que je l'exécute intégralement dans la foulée, ou préfères-tu valider chantier par chantier (je m'arrête à la fin de chaque chantier pour que tu testes) ?

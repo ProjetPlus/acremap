@@ -298,22 +298,28 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          disabled: boolean
           full_name: string | null
           id: string
+          must_change_password: boolean
           updated_at: string
           username: string | null
         }
         Insert: {
           created_at?: string
+          disabled?: boolean
           full_name?: string | null
           id: string
+          must_change_password?: boolean
           updated_at?: string
           username?: string | null
         }
         Update: {
           created_at?: string
+          disabled?: boolean
           full_name?: string | null
           id?: string
+          must_change_password?: boolean
           updated_at?: string
           username?: string | null
         }

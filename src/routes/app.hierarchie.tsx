@@ -48,16 +48,21 @@ function HierarchiePage() {
           const expanded = openSp === sp.id;
           return (
             <div key={sp.id}>
-              <button onClick={() => setOpenSp(expanded ? null : sp.id)}
-                className="w-full text-left p-4 hover:bg-muted/60 flex items-center justify-between">
-                <div>
+              <div className="w-full p-4 hover:bg-muted/60 flex items-center justify-between gap-3">
+                <button onClick={() => setOpenSp(expanded ? null : sp.id)} className="flex-1 text-left">
                   <div className="font-semibold">{sp.code} · {sp.name}</div>
                   <div className="text-xs text-muted-foreground">
                     {sp.district} › {sp.region} › {sp.departement} · {doms.length} domaine(s)
                   </div>
-                </div>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); void exportSpPng(sp as SP); }}
+                  className="text-xs px-2.5 py-1.5 rounded border border-primary/30 text-primary hover:bg-primary/10"
+                  title="Exporter le plan PNG de la sous-préfecture">
+                  📷 PNG
+                </button>
                 <span className="text-muted-foreground">{expanded ? "▴" : "▾"}</span>
-              </button>
+              </div>
               {expanded && (
                 <div className="bg-muted/30 px-4 pb-3">
                   <div className="flex items-center justify-between py-2">

@@ -76,14 +76,19 @@ function HierarchiePage() {
                     const e = openDom === dom.id;
                     return (
                       <div key={dom.id} className="bg-card rounded-lg my-1.5">
-                        <button onClick={() => setOpenDom(e ? null : dom.id)}
-                          className="w-full text-left px-3 py-2.5 flex items-center justify-between">
-                          <div>
+                        <div className="w-full px-3 py-2.5 flex items-center justify-between gap-2">
+                          <button onClick={() => setOpenDom(e ? null : dom.id)} className="flex-1 text-left">
                             <div className="font-medium text-sm">{dom.code} · {dom.name}</div>
                             <div className="text-[11px] text-muted-foreground">{parcs.length} parcelle(s)</div>
-                          </div>
+                          </button>
+                          <button
+                            onClick={(ev) => { ev.stopPropagation(); void exportDomainePng(dom as Domaine, sp as SP); }}
+                            className="text-[11px] px-2 py-1 rounded border border-primary/30 text-primary hover:bg-primary/10"
+                            title="Exporter le plan PNG du domaine">
+                            📷 PNG
+                          </button>
                           <span className="text-muted-foreground text-xs">{e ? "▴" : "▾"}</span>
-                        </button>
+                        </div>
                         {e && (
                           <div className="px-3 pb-3 space-y-1">
                             <div className="flex items-center justify-between">

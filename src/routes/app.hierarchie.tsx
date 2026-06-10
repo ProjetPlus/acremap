@@ -4,8 +4,10 @@ import { useState } from "react";
 import { db, isBrowser } from "@/lib/db";
 import { nextSequentialCode } from "@/lib/ref";
 import {
-  listDistricts, regionsOfDistrict, departementsOfRegion, spsOfDepartement,
+  listDistricts, regionsOfDistrict, departementsOfRegion,
 } from "@/lib/ci-admin";
+import { exportSpPng, exportDomainePng } from "@/lib/render/png-export";
+import type { SP, Domaine } from "@/lib/types";
 
 export const Route = createFileRoute("/app/hierarchie")({
   component: HierarchiePage,

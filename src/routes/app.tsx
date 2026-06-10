@@ -51,7 +51,7 @@ function AppLayout() {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
 
-  useEffect(() => { setNotifPerm(notificationPermission()); }, []);
+  useEffect(() => { setNotifPerm(notificationPermission()); initSync(); }, []);
 
   if (!hydrated || !user) return null;
   const items = NAV.filter((n) => !n.admin || user.role === "admin");

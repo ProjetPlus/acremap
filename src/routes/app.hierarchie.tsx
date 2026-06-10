@@ -4,8 +4,10 @@ import { useState } from "react";
 import { db, isBrowser } from "@/lib/db";
 import { nextSequentialCode } from "@/lib/ref";
 import {
-  listDistricts, regionsOfDistrict, departementsOfRegion, spsOfDepartement,
+  listDistricts, regionsOfDistrict, departementsOfRegion,
 } from "@/lib/ci-admin";
+import { exportSpPng, exportDomainePng } from "@/lib/render/png-export";
+import type { SP, Domaine } from "@/lib/types";
 
 export const Route = createFileRoute("/app/hierarchie")({
   component: HierarchiePage,
@@ -46,16 +48,21 @@ function HierarchiePage() {
           const expanded = openSp === sp.id;
           return (
             <div key={sp.id}>
-              <button onClick={() => setOpenSp(expanded ? null : sp.id)}
-                className="w-full text-left p-4 hover:bg-muted/60 flex items-center justify-between">
-                <div>
+              <div className="w-full p-4 hover:bg-muted/60 flex items-center justify-between gap-3">
+                <button onClick={() => setOpenSp(expanded ? null : sp.id)} className="flex-1 text-left">
                   <div className="font-semibold">{sp.code} · {sp.name}</div>
                   <div className="text-xs text-muted-foreground">
                     {sp.district} › {sp.region} › {sp.departement} · {doms.length} domaine(s)
                   </div>
-                </div>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); void exportSpPng(sp as SP); }}
+                  className="text-xs px-2.5 py-1.5 rounded border border-primary/30 text-primary hover:bg-primary/10"
+                  title="Exporter le plan PNG de la sous-préfecture">
+                  📷 PNG
+                </button>
                 <span className="text-muted-foreground">{expanded ? "▴" : "▾"}</span>
-              </button>
+              </div>
               {expanded && (
                 <div className="bg-muted/30 px-4 pb-3">
                   <div className="flex items-center justify-between py-2">
@@ -69,14 +76,19 @@ function HierarchiePage() {
                     const e = openDom === dom.id;
                     return (
                       <div key={dom.id} className="bg-card rounded-lg my-1.5">
-                        <button onClick={() => setOpenDom(e ? null : dom.id)}
-                          className="w-full text-left px-3 py-2.5 flex items-center justify-between">
-                          <div>
+                        <div className="w-full px-3 py-2.5 flex items-center justify-between gap-2">
+                          <button onClick={() => setOpenDom(e ? null : dom.id)} className="flex-1 text-left">
                             <div className="font-medium text-sm">{dom.code} · {dom.name}</div>
                             <div className="text-[11px] text-muted-foreground">{parcs.length} parcelle(s)</div>
-                          </div>
+                          </button>
+                          <button
+                            onClick={(ev) => { ev.stopPropagation(); void exportDomainePng(dom as Domaine, sp as SP); }}
+                            className="text-[11px] px-2 py-1 rounded border border-primary/30 text-primary hover:bg-primary/10"
+                            title="Exporter le plan PNG du domaine">
+                            📷 PNG
+                          </button>
                           <span className="text-muted-foreground text-xs">{e ? "▴" : "▾"}</span>
-                        </button>
+                        </div>
                         {e && (
                           <div className="px-3 pb-3 space-y-1">
                             <div className="flex items-center justify-between">

@@ -1,6 +1,16 @@
 import Dexie, { type Table } from "dexie";
 import type { Domaine, Lot, Measurement, Parcelle, SP, User } from "./types";
 
+export interface OutboxEntry {
+  id: string;            // entity id (uuid)
+  table: "sps" | "domaines" | "parcelles" | "measurements" | "lots";
+  op: "upsert" | "delete";
+  payload?: unknown;     // serialized row (for upsert)
+  ts: number;
+  attempts: number;
+  lastError?: string;
+}
+
 class AcreDB extends Dexie {
   users!: Table<User, string>;
   sps!: Table<SP, string>;
@@ -9,6 +19,7 @@ class AcreDB extends Dexie {
   measurements!: Table<Measurement, string>;
   lots!: Table<Lot, string>;
   meta!: Table<{ key: string; value: unknown }, string>;
+  outbox!: Table<OutboxEntry, string>;
 
   constructor() {
     super("acremap");
@@ -21,7 +32,6 @@ class AcreDB extends Dexie {
       lots: "id, parcelleId, code",
       meta: "key",
     });
-    // v2 — added geographic hierarchy fields and parcelle photos
     this.version(2).stores({
       users: "id, username, role",
       sps: "id, code, district, region, departement",
@@ -31,7 +41,6 @@ class AcreDB extends Dexie {
       lots: "id, parcelleId, code",
       meta: "key",
     });
-    // v3 — index measurementId so consultation/morcellement can load lots without Dexie errors
     this.version(3).stores({
       users: "id, username, role",
       sps: "id, code, district, region, departement",
@@ -40,6 +49,17 @@ class AcreDB extends Dexie {
       measurements: "id, status, parcelleId, createdBy, createdAt",
       lots: "id, parcelleId, measurementId, code",
       meta: "key",
+    });
+    // v4 — outbox table for offline sync
+    this.version(4).stores({
+      users: "id, username, role",
+      sps: "id, code, district, region, departement",
+      domaines: "id, code, spId",
+      parcelles: "id, code, domaineId, ownerName",
+      measurements: "id, status, parcelleId, createdBy, createdAt",
+      lots: "id, parcelleId, measurementId, code",
+      meta: "key",
+      outbox: "[table+id], table, ts",
     });
   }
 }

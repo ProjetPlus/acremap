@@ -4,6 +4,7 @@ import { Logo } from "@/components/Logo";
 import { useAuth } from "@/lib/auth";
 import { useNavigate, Outlet } from "@tanstack/react-router";
 import { notificationPermission, requestNotificationPermission } from "@/lib/feedback";
+import { initSync } from "@/lib/sync";
 
 export const Route = createFileRoute("/app")({
   component: AppLayout,
@@ -50,7 +51,7 @@ function AppLayout() {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
 
-  useEffect(() => { setNotifPerm(notificationPermission()); }, []);
+  useEffect(() => { setNotifPerm(notificationPermission()); initSync(); }, []);
 
   if (!hydrated || !user) return null;
   const items = NAV.filter((n) => !n.admin || user.role === "admin");

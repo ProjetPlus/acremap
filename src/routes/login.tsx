@@ -4,13 +4,23 @@ import { Logo } from "@/components/Logo";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 
+function safeNext(v: unknown): string | undefined {
+  return typeof v === "string" && v.startsWith("/") && !v.startsWith("//") ? v : undefined;
+}
+
 export const Route = createFileRoute("/login")({
+  validateSearch: (s: Record<string, unknown>) => ({ next: safeNext(s.next) }),
   component: LoginPage,
   head: () => ({ meta: [{ title: "Connexion — AcreMap" }] }),
 });
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
+  const goAfterAuth = () => {
+    if (next) { window.location.href = next; return; }
+    navigate({ to: "/app" });
+  };
   const signIn = useAuth((s) => s.signIn);
   const user = useAuth((s) => s.user);
   const hydrated = useAuth((s) => s.hydrated);
@@ -25,7 +35,7 @@ function LoginPage() {
   useEffect(() => {
     if (hydrated && user) {
       if (user.mustChangePassword) navigate({ to: "/app/change-password" });
-      else navigate({ to: "/app" });
+      else goAfterAuth();
     }
   }, [hydrated, user, navigate]);
 
@@ -43,7 +53,7 @@ function LoginPage() {
     try {
       const me = await signIn(u, p);
       if ((me as any).mustChangePassword) navigate({ to: "/app/change-password" });
-      else navigate({ to: "/app" });
+      else goAfterAuth();
     } catch (e: any) {
       setErr(e.message);
     } finally { setLoading(false); }
@@ -55,7 +65,7 @@ function LoginPage() {
     try {
       const { data, error } = await supabase.auth.signUp({
         email: u, password: p,
-        options: { emailRedirectTo: window.location.origin, data: { full_name: signupName || u.split("@")[0], username: u.split("@")[0] } }
+        options: { emailRedirectTo: window.location.origin + (next ?? ""), data: { full_name: signupName || u.split("@")[0], username: u.split("@")[0] } }
       });
       if (error) throw error;
       if (!data.session) {
@@ -66,7 +76,7 @@ function LoginPage() {
       // Auto-promote as first admin
       const { bootstrapFirstAdmin } = await import("@/lib/admin-users.functions");
       try { await bootstrapFirstAdmin(); } catch { /* ignore */ }
-      navigate({ to: "/app" });
+      goAfterAuth();
     } catch (e: any) {
       setErr(e.message);
     } finally { setLoading(false); }

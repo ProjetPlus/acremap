@@ -22,6 +22,7 @@ import { Route as AppChangePasswordRouteImport } from './routes/app.change-passw
 import { Route as AppParcellesIndexRouteImport } from './routes/app.parcelles.index'
 import { Route as AppParcellesNewRouteImport } from './routes/app.parcelles.new'
 import { Route as AppParcellesIdRouteImport } from './routes/app.parcelles.$id'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -88,6 +89,11 @@ const AppParcellesIdRoute = AppParcellesIdRouteImport.update({
   path: '/parcelles/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
   '/app/': typeof AppIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/app/parcelles/$id': typeof AppParcellesIdRoute
   '/app/parcelles/new': typeof AppParcellesNewRoute
   '/app/parcelles/': typeof AppParcellesIndexRoute
@@ -114,6 +121,7 @@ export interface FileRoutesByTo {
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
   '/app': typeof AppIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/app/parcelles/$id': typeof AppParcellesIdRoute
   '/app/parcelles/new': typeof AppParcellesNewRoute
   '/app/parcelles': typeof AppParcellesIndexRoute
@@ -130,6 +138,7 @@ export interface FileRoutesById {
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
   '/app/': typeof AppIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/app/parcelles/$id': typeof AppParcellesIdRoute
   '/app/parcelles/new': typeof AppParcellesNewRoute
   '/app/parcelles/': typeof AppParcellesIndexRoute
@@ -147,6 +156,7 @@ export interface FileRouteTypes {
     | '/app/users'
     | '/app/validation'
     | '/app/'
+    | '/.lovable/oauth/consent'
     | '/app/parcelles/$id'
     | '/app/parcelles/new'
     | '/app/parcelles/'
@@ -161,6 +171,7 @@ export interface FileRouteTypes {
     | '/app/users'
     | '/app/validation'
     | '/app'
+    | '/.lovable/oauth/consent'
     | '/app/parcelles/$id'
     | '/app/parcelles/new'
     | '/app/parcelles'
@@ -176,6 +187,7 @@ export interface FileRouteTypes {
     | '/app/users'
     | '/app/validation'
     | '/app/'
+    | '/.lovable/oauth/consent'
     | '/app/parcelles/$id'
     | '/app/parcelles/new'
     | '/app/parcelles/'
@@ -185,6 +197,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -280,6 +293,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppParcellesIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -315,6 +335,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

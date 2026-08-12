@@ -4,8 +4,9 @@ import getParcelleTool from "./tools/get-parcelle";
 import listHierarchieTool from "./tools/list-hierarchie";
 import listLotsTool from "./tools/list-lots";
 
-// The OAuth issuer must be the direct Supabase host; the project ref is inlined at build time.
-const projectRef = import.meta.env['VITE_SUPABASE_PROJECT_ID'] ?? "project-ref-unset";
+import { SUPABASE_PROJECT_REF } from "./supabase";
+
+// The OAuth issuer must be the direct Supabase host of the project that mints the tokens.
 
 export default defineMcp({
   name: "acremap",
@@ -17,7 +18,7 @@ export default defineMcp({
     "list_lots pour les lots de morcellement et list_hierarchie pour les SP et domaines. " +
     "Les données sont lues au nom de l'utilisateur connecté.",
   auth: auth.oauth.issuer({
-    issuer: `https://${projectRef}.supabase.co/auth/v1`,
+    issuer: `https://${SUPABASE_PROJECT_REF}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated",
   }),
   tools: [listParcellesTool, getParcelleTool, listLotsTool, listHierarchieTool],

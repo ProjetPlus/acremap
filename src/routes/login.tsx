@@ -9,7 +9,10 @@ function safeNext(v: unknown): string | undefined {
 }
 
 export const Route = createFileRoute("/login")({
-  validateSearch: (s: Record<string, unknown>) => ({ next: safeNext(s.next) }),
+  validateSearch: (s: Record<string, unknown>): { next?: string } => {
+    const next = safeNext(s.next);
+    return next ? { next } : {};
+  },
   component: LoginPage,
   head: () => ({ meta: [{ title: "Connexion — AcreMap" }] }),
 });

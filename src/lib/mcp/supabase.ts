@@ -20,10 +20,16 @@ function configuredEnv(names: readonly string[]): string | undefined {
   return undefined;
 }
 
+// The app authenticates against this Supabase project (same values as
+// src/integrations/supabase/client.ts). Env vars are only a fallback.
+export const SUPABASE_PROJECT_REF = "nrrgqnruoylwztddkntm";
+const DEFAULT_URL = `https://${SUPABASE_PROJECT_REF}.supabase.co`;
+const DEFAULT_PUBLISHABLE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycmdxbnJ1b3lsd3p0ZGRrbnRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNTYxOTYsImV4cCI6MjA4NjczMjE5Nn0.p2bFufIgC7dcHIWTBBGdhkEbS9XXxiEdIY2kymE0dZ0";
+
 function supabaseProjectUrl(): string {
   const url = configuredEnv(["SUPABASE_URL", "VITE_SUPABASE_URL"]);
-  if (!url) throw new Error("SUPABASE_URL (or VITE_SUPABASE_URL) is required");
-  return url;
+  return url && url.includes(SUPABASE_PROJECT_REF) ? url : DEFAULT_URL;
 }
 
 function supabasePublishableKey(): string {
@@ -31,28 +37,11 @@ function supabasePublishableKey(): string {
     "SUPABASE_PUBLISHABLE_KEY",
     "VITE_SUPABASE_PUBLISHABLE_KEY",
   ]);
-  if (direct) return direct;
-  const keyset = runtimeEnv("SUPABASE_PUBLISHABLE_KEYS");
-  if (keyset) {
-    try {
-      const parsed: unknown = JSON.parse(keyset);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        const keys = parsed as Record<string, unknown>;
-        const key = [keys.default, ...Object.values(keys)]
-          .find((v): v is string => typeof v === "string" && v.trim().startsWith("sb_publishable_"))
-          ?.trim();
-        if (key) return key;
-      }
-    } catch {
-      // malformed dictionary — fall through to legacy names
-    }
-  }
-  const legacy = configuredEnv(["SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY"]);
-  if (legacy) return legacy;
-  throw new Error("SUPABASE_PUBLISHABLE_KEY, SUPABASE_PUBLISHABLE_KEYS, or SUPABASE_ANON_KEY is required");
+  const url = configuredEnv(["SUPABASE_URL", "VITE_SUPABASE_URL"]);
+  if (direct && url?.includes(SUPABASE_PROJECT_REF)) return direct;
+  return DEFAULT_PUBLISHABLE_KEY;
 }
 
-// Forwards the verified bearer token so RLS runs as the signed-in user.
 export function supabaseForUser(ctx: ToolContext) {
   const token = ctx.getToken();
   if (!token) throw new Error("supabaseForUser requires a verified OAuth token");

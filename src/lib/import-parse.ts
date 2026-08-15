@@ -50,10 +50,9 @@ export function parseDxf(text: string, utmZone?: number): ParseResult {
   let pendingX: number | null = null;
 
   const flush = () => {
-    if (current.length >= 3) rings.push({ points: [], label: layer || undefined, ...{ points: [] } } as ParsedRing);
     if (current.length >= 3) {
       const pts = current.map((p) => toLatLng(p.x, p.y, utmZone));
-      rings[rings.length - 1] = { points: closeRing(pts.filter((p) => valid(p.lat, p.lng))), label: layer || undefined };
+      rings.push({ points: closeRing(pts.filter((p) => valid(p.lat, p.lng))), label: layer || undefined });
     }
     current = [];
   };

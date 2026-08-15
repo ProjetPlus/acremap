@@ -17,6 +17,7 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppValidationRouteImport } from './routes/app.validation'
 import { Route as AppUsersRouteImport } from './routes/app.users'
 import { Route as AppMeasureRouteImport } from './routes/app.measure'
+import { Route as AppImportRouteImport } from './routes/app.import'
 import { Route as AppHierarchieRouteImport } from './routes/app.hierarchie'
 import { Route as AppDebugRouteImport } from './routes/app.debug'
 import { Route as AppChangePasswordRouteImport } from './routes/app.change-password'
@@ -66,6 +67,11 @@ const AppUsersRoute = AppUsersRouteImport.update({
 const AppMeasureRoute = AppMeasureRouteImport.update({
   id: '/measure',
   path: '/measure',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppImportRoute = AppImportRouteImport.update({
+  id: '/import',
+  path: '/import',
   getParentRoute: () => AppRoute,
 } as any)
 const AppHierarchieRoute = AppHierarchieRouteImport.update({
@@ -132,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
+  '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
+  '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
@@ -172,6 +180,7 @@ export interface FileRoutesById {
   '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
+  '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
@@ -194,6 +203,7 @@ export interface FileRouteTypes {
     | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
+    | '/app/import'
     | '/app/measure'
     | '/app/users'
     | '/app/validation'
@@ -213,6 +223,7 @@ export interface FileRouteTypes {
     | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
+    | '/app/import'
     | '/app/measure'
     | '/app/users'
     | '/app/validation'
@@ -233,6 +244,7 @@ export interface FileRouteTypes {
     | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
+    | '/app/import'
     | '/app/measure'
     | '/app/users'
     | '/app/validation'
@@ -313,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMeasureRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/import': {
+      id: '/app/import'
+      path: '/import'
+      fullPath: '/app/import'
+      preLoaderRoute: typeof AppImportRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/hierarchie': {
       id: '/app/hierarchie'
       path: '/hierarchie'
@@ -390,6 +409,7 @@ interface AppRouteChildren {
   AppChangePasswordRoute: typeof AppChangePasswordRoute
   AppDebugRoute: typeof AppDebugRoute
   AppHierarchieRoute: typeof AppHierarchieRoute
+  AppImportRoute: typeof AppImportRoute
   AppMeasureRoute: typeof AppMeasureRoute
   AppUsersRoute: typeof AppUsersRoute
   AppValidationRoute: typeof AppValidationRoute
@@ -403,6 +423,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppChangePasswordRoute: AppChangePasswordRoute,
   AppDebugRoute: AppDebugRoute,
   AppHierarchieRoute: AppHierarchieRoute,
+  AppImportRoute: AppImportRoute,
   AppMeasureRoute: AppMeasureRoute,
   AppUsersRoute: AppUsersRoute,
   AppValidationRoute: AppValidationRoute,

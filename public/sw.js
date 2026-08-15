@@ -1,10 +1,10 @@
-// AcreMap Service Worker — cache + tiles + notifications
-const CACHE = "acremap-v2";
+// AcreMap Service Worker — hors ligne complet (app shell + assets + tuiles) + notifications
+const CACHE = "acremap-v3";
 const TILE_CACHE = "acremap-tiles-v1";
-const SHELL = ["/", "/manifest.webmanifest"];
+const SHELL = ["/", "/login", "/app", "/manifest.webmanifest", "/favicon.png", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
+  e.waitUntil(caches.open(CACHE).then((c) => Promise.allSettled(SHELL.map((u) => c.add(u)))).catch(() => {}));
   self.skipWaiting();
 });
 
@@ -17,16 +17,24 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
+function isTile(url) {
+  return /tile\.openstreetmap|arcgisonline|tile\.thunderforest|stamen|esri|basemaps|googleapis\.com\/maps|mt[0-9]\.google/.test(url.hostname + url.pathname);
+}
+
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
-  if (/tile\.openstreetmap|arcgisonline|tile\.thunderforest|stamen|esri/.test(url.hostname)) {
+  const req = event.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+
+  // 1) Tuiles cartographiques : cache-first, persistant (utilisation hors ligne sur le terrain)
+  if (isTile(url)) {
     event.respondWith(
       caches.open(TILE_CACHE).then(async (cache) => {
-        const cached = await cache.match(event.request);
+        const cached = await cache.match(req);
         if (cached) return cached;
         try {
-          const res = await fetch(event.request);
-          if (res.ok) cache.put(event.request, res.clone());
+          const res = await fetch(req);
+          if (res && (res.ok || res.type === "opaque")) cache.put(req, res.clone());
           return res;
         } catch {
           return cached || Response.error();
@@ -35,14 +43,96 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
-  if (event.request.mode === "navigate") {
+
+  // 2) Navigations : réseau puis repli sur l'app shell mise en cache
+  if (req.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match("/").then((r) => r || Response.error()))
+      (async () => {
+        try {
+          const res = await fetch(req);
+          const c = await caches.open(CACHE);
+          c.put(req, res.clone()).catch(() => {});
+          return res;
+        } catch {
+          const c = await caches.open(CACHE);
+          return (await c.match(req)) || (await c.match("/app")) || (await c.match("/")) || Response.error();
+        }
+      })()
+    );
+    return;
+  }
+
+  // 3) Assets même origine (JS/CSS/images/polices) : stale-while-revalidate
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      (async () => {
+        const c = await caches.open(CACHE);
+        const cached = await c.match(req);
+        const network = fetch(req)
+          .then((res) => { if (res && res.ok) c.put(req, res.clone()).catch(() => {}); return res; })
+          .catch(() => null);
+        return cached || (await network) || Response.error();
+      })()
+    );
+    return;
+  }
+
+  // 4) Polices / CDN externes : cache-first
+  if (/fonts\.googleapis\.com|fonts\.gstatic\.com|unpkg\.com|cdn\.jsdelivr\.net/.test(url.hostname)) {
+    event.respondWith(
+      (async () => {
+        const c = await caches.open(CACHE);
+        const cached = await c.match(req);
+        if (cached) return cached;
+        try {
+          const res = await fetch(req);
+          if (res && (res.ok || res.type === "opaque")) c.put(req, res.clone()).catch(() => {});
+          return res;
+        } catch {
+          return Response.error();
+        }
+      })()
     );
   }
 });
 
-// Push notifications (serveur push à brancher plus tard).
+// Pré-chargement de tuiles demandé par la page (zone de travail → utilisation hors ligne)
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+
+  if (data.type === "prefetch-tiles" && Array.isArray(data.urls)) {
+    event.waitUntil(
+      caches.open(TILE_CACHE).then(async (cache) => {
+        let done = 0;
+        for (const u of data.urls.slice(0, 4000)) {
+          try {
+            if (!(await cache.match(u))) {
+              const res = await fetch(u, { mode: "no-cors" });
+              if (res) await cache.put(u, res.clone());
+            }
+            done++;
+          } catch { /* réseau indisponible → on continue */ }
+        }
+        const clients = await self.clients.matchAll({ includeUncontrolled: true });
+        clients.forEach((c) => c.postMessage({ type: "prefetch-tiles-done", done, total: data.urls.length }));
+      })
+    );
+    return;
+  }
+
+  if (data.type === "show-notification") {
+    self.registration.showNotification(data.title || "AcreMap", {
+      body: data.body || "",
+      tag: data.tag,
+      icon: "/icon-192.png",
+      badge: "/favicon.png",
+      requireInteraction: true,
+      vibrate: [300, 100, 300, 100, 500],
+      data: data.data || {},
+    });
+  }
+});
+
 self.addEventListener("push", (event) => {
   let payload = { title: "AcreMap", body: "Nouvelle notification", tag: "acremap", data: {} };
   try {
@@ -52,8 +142,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(payload.title, {
       body: payload.body,
       tag: payload.tag,
-      icon: "/favicon.ico",
-      badge: "/favicon.ico",
+      icon: "/icon-192.png",
+      badge: "/favicon.png",
       requireInteraction: true,
       vibrate: [300, 100, 300, 100, 500],
       data: payload.data,
@@ -72,20 +162,4 @@ self.addEventListener("notificationclick", (event) => {
       if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
     })
   );
-});
-
-// Permet de déclencher une notification depuis la page (postMessage).
-self.addEventListener("message", (event) => {
-  const data = event.data || {};
-  if (data.type === "show-notification") {
-    self.registration.showNotification(data.title || "AcreMap", {
-      body: data.body || "",
-      tag: data.tag,
-      icon: "/favicon.ico",
-      badge: "/favicon.ico",
-      requireInteraction: true,
-      vibrate: [300, 100, 300, 100, 500],
-      data: data.data || {},
-    });
-  }
 });

@@ -178,6 +178,92 @@ export async function migrateLocalToCloud(onProgress: (p: MigrationProgress) => 
   return { ok: totalOk, failed: totalFailed, perTable };
 }
 
+// ---- Lecture depuis Supabase → cache local IndexedDB (hors ligne) ----
+function ts(v: string | null | undefined): number {
+  return v ? new Date(v).getTime() : Date.now();
+}
+
+export interface PullResult { total: number; perTable: Record<string, number> }
+
+export async function pullFromCloud(): Promise<PullResult> {
+  if (!isBrowser()) return { total: 0, perTable: {} };
+  const local = db();
+  const perTable: Record<string, number> = {};
+  let total = 0;
+
+  const spsRes = await supabase.from("sps").select("*").limit(1000);
+  if (spsRes.data) {
+    const rows: SP[] = spsRes.data.map((r) => ({
+      id: r.id, code: r.code, name: r.name,
+      district: r.district ?? "", region: r.region ?? "", departement: r.departement ?? "",
+      notes: r.notes ?? undefined, createdAt: ts(r.created_at),
+    }));
+    await local.sps.bulkPut(rows);
+    perTable.sps = rows.length; total += rows.length;
+  }
+
+  const domRes = await supabase.from("domaines").select("*").limit(1000);
+  if (domRes.data) {
+    const rows: Domaine[] = domRes.data.map((r) => ({
+      id: r.id, code: r.code, name: r.name, spId: r.sp_id,
+      description: r.description ?? undefined, notes: r.notes ?? undefined, createdAt: ts(r.created_at),
+    }));
+    await local.domaines.bulkPut(rows);
+    perTable.domaines = rows.length; total += rows.length;
+  }
+
+  const parcRes = await supabase.from("parcelles").select("*").limit(1000);
+  if (parcRes.data) {
+    const rows: Parcelle[] = parcRes.data.map((r) => ({
+      id: r.id, code: r.code, ownerName: r.owner_name ?? "", ownerPhone: r.owner_phone ?? undefined,
+      domaineId: r.domaine_id, conventionDate: ts(r.convention_date),
+      declaredArea: r.declared_area ?? undefined,
+      conventionStatus: (r.convention_status ?? "EN_COURS") as Parcelle["conventionStatus"],
+      ownerPhoto: r.owner_photo ?? undefined, groupPhoto: r.group_photo ?? undefined,
+      parcellePhoto: r.parcelle_photo ?? undefined,
+      notes: r.notes ?? undefined, createdAt: ts(r.created_at),
+    }));
+    await local.parcelles.bulkPut(rows);
+    perTable.parcelles = rows.length; total += rows.length;
+  }
+
+  const mRes = await supabase.from("measurements").select("*").limit(1000);
+  if (mRes.data) {
+    const rows: Measurement[] = mRes.data.map((r) => ({
+      id: r.id, parcelleId: r.parcelle_id ?? undefined,
+      createdBy: r.created_by ?? "", createdAt: ts(r.created_at),
+      status: r.status as Measurement["status"],
+      validatedBy: r.validated_by ?? undefined,
+      validatedAt: r.validated_at ? ts(r.validated_at) : undefined,
+      points: (r.points ?? []) as Measurement["points"],
+      trace: (r.trace ?? []) as Measurement["trace"],
+      areaM2: Number(r.area_m2 ?? 0), perimeterM: Number(r.perimeter_m ?? 0),
+      unit: (r.unit ?? "ha") as Measurement["unit"],
+      deviceProfile: (r.device_profile ?? undefined) as Measurement["deviceProfile"],
+      qa: (r.qa ?? undefined) as Measurement["qa"],
+      notes: r.notes ?? undefined,
+    }));
+    await local.measurements.bulkPut(rows);
+    perTable.measurements = rows.length; total += rows.length;
+  }
+
+  const lotRes = await supabase.from("lots").select("*").limit(2000);
+  if (lotRes.data) {
+    const rows: Lot[] = lotRes.data.map((r) => ({
+      id: r.id, parcelleId: r.parcelle_id, measurementId: r.measurement_id ?? "",
+      code: r.code, polygon: (r.polygon ?? []) as Lot["polygon"],
+      bornes: (r.bornes ?? []) as Lot["bornes"],
+      areaM2: Number(r.area_m2 ?? 0), isReserve: r.is_reserve ?? false,
+      assigneeName: r.assignee_name ?? undefined,
+      assignedAt: r.assigned_at ? ts(r.assigned_at) : undefined,
+    }));
+    await local.lots.bulkPut(rows);
+    perTable.lots = rows.length; total += rows.length;
+  }
+
+  return { total, perTable };
+}
+
 // ---- Auto-flush on reconnect ----
 let _initialized = false;
 export function initSync() {

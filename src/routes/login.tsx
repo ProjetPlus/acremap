@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/lib/auth";
-import { supabase } from "@/integrations/supabase/client";
 
 function safeNext(v: unknown): string | undefined {
   return typeof v === "string" && v.startsWith("/") && !v.startsWith("//") ? v : undefined;
@@ -14,7 +13,14 @@ export const Route = createFileRoute("/login")({
     return next ? { next } : {};
   },
   component: LoginPage,
-  head: () => ({ meta: [{ title: "Connexion — AcreMap" }] }),
+  head: () => ({
+    meta: [
+      { title: "Connexion — AcreMap" },
+      { name: "description", content: "Connexion à AcreMap : levé GPS, morcellement en lots d'1 ha et référencement des plantations." },
+      { property: "og:title", content: "Connexion — AcreMap" },
+      { property: "og:description", content: "Espace de travail terrain AgriCapital : mesurer, morceler, référencer." },
+    ],
+  }),
 });
 
 function LoginPage() {
@@ -31,57 +37,24 @@ function LoginPage() {
   const [p, setP] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [needsSignup, setNeedsSignup] = useState(false);
-  const [signupName, setSignupName] = useState("");
 
-  // Si déjà connecté → /app
   useEffect(() => {
     if (hydrated && user) {
       if (user.mustChangePassword) navigate({ to: "/app/change-password" });
       else goAfterAuth();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, user, navigate]);
-
-  // Détecte si la base n'a aucun admin → propose le bootstrap (1ère installation)
-  useEffect(() => {
-    (async () => {
-      const { count } = await supabase.from("user_roles").select("user_id", { count: "exact", head: true }).eq("role", "admin");
-      if ((count ?? 0) === 0) setNeedsSignup(true);
-    })();
-  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null); setLoading(true);
     try {
       const me = await signIn(u, p);
-      if ((me as any).mustChangePassword) navigate({ to: "/app/change-password" });
+      if ((me as { mustChangePassword?: boolean }).mustChangePassword) navigate({ to: "/app/change-password" });
       else goAfterAuth();
-    } catch (e: any) {
-      setErr(e.message);
-    } finally { setLoading(false); }
-  }
-
-  async function bootstrapSignup(e: React.FormEvent) {
-    e.preventDefault();
-    setErr(null); setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: u, password: p,
-        options: { emailRedirectTo: window.location.origin + (next ?? ""), data: { full_name: signupName || u.split("@")[0], username: u.split("@")[0] } }
-      });
-      if (error) throw error;
-      if (!data.session) {
-        setErr("Compte créé. Vérifiez votre e-mail pour confirmer, puis connectez-vous.");
-        setNeedsSignup(false);
-        return;
-      }
-      // Auto-promote as first admin
-      const { bootstrapFirstAdmin } = await import("@/lib/admin-users.functions");
-      try { await bootstrapFirstAdmin(); } catch { /* ignore */ }
-      goAfterAuth();
-    } catch (e: any) {
-      setErr(e.message);
+    } catch (e) {
+      setErr((e as Error).message);
     } finally { setLoading(false); }
   }
 
@@ -104,7 +77,7 @@ function LoginPage() {
       </aside>
 
       <main className="flex items-center justify-center p-6 bg-background">
-        <form onSubmit={needsSignup ? bootstrapSignup : submit} className="w-full max-w-sm space-y-6">
+        <form onSubmit={submit} className="w-full max-w-sm space-y-6">
           <div className="lg:hidden flex flex-col items-center text-center">
             <Logo className="h-20 w-20" />
             <div className="mt-3 text-xl font-bold text-primary">AcreMap</div>
@@ -112,22 +85,13 @@ function LoginPage() {
           </div>
 
           <div>
-            <h2 className="text-2xl font-bold">{needsSignup ? "Première installation" : "Connexion"}</h2>
+            <h2 className="text-2xl font-bold">Connexion</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              {needsSignup
-                ? "Aucun administrateur n'existe encore. Créez le premier compte administrateur."
-                : "Accédez à votre espace de travail terrain."}
+              Accédez à votre espace de travail terrain. Les comptes sont créés par l'administrateur.
             </p>
           </div>
 
           <div className="space-y-3">
-            {needsSignup && (
-              <label className="block">
-                <span className="text-xs font-medium text-muted-foreground">Nom complet</span>
-                <input value={signupName} onChange={(e) => setSignupName(e.target.value)} required
-                  className="mt-1 w-full h-11 px-3 rounded-lg border bg-card" />
-              </label>
-            )}
             <label className="block">
               <span className="text-xs font-medium text-muted-foreground">Adresse e-mail</span>
               <input value={u} onChange={(e) => setU(e.target.value)} type="email" required autoComplete="email"
@@ -135,7 +99,7 @@ function LoginPage() {
             </label>
             <label className="block">
               <span className="text-xs font-medium text-muted-foreground">Mot de passe</span>
-              <input type="password" value={p} onChange={(e) => setP(e.target.value)} required autoComplete={needsSignup ? "new-password" : "current-password"}
+              <input type="password" value={p} onChange={(e) => setP(e.target.value)} required autoComplete="current-password"
                 className="mt-1 w-full h-11 px-3 rounded-lg border border-input bg-card focus:outline-none focus:ring-2 focus:ring-ring" />
             </label>
           </div>
@@ -144,7 +108,7 @@ function LoginPage() {
 
           <button disabled={loading} type="submit"
             className="w-full h-11 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-secondary transition-colors disabled:opacity-60">
-            {loading ? "Veuillez patienter…" : needsSignup ? "Créer le compte administrateur" : "Se connecter"}
+            {loading ? "Veuillez patienter…" : "Se connecter"}
           </button>
 
           <div className="text-center text-xs text-muted-foreground">

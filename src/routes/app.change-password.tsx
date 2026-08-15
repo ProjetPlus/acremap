@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Logo } from "@/components/Logo";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { changeOwnPassword } from "@/lib/account.functions";
 
 export const Route = createFileRoute("/app/change-password")({
   component: ChangePasswordPage,
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/app/change-password")({
 function ChangePasswordPage() {
   const nav = useNavigate();
   const refreshProfile = useAuth((s) => s.refreshProfile);
-  const user = useAuth((s) => s.user);
+  const updatePassword = useServerFn(changeOwnPassword);
   const [p1, setP1] = useState("");
   const [p2, setP2] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -25,16 +26,13 @@ function ChangePasswordPage() {
     if (p1 !== p2) { setErr("Les deux mots de passe ne correspondent pas"); return; }
     setBusy(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: p1 });
-      if (error) throw error;
-      if (user) {
-        await supabase.from("profiles").update({ must_change_password: false }).eq("id", user.id);
-      }
+      await updatePassword({ data: { password: p1 } });
       await refreshProfile();
       nav({ to: "/app" });
     } catch (e: any) { setErr(e.message); }
     finally { setBusy(false); }
   }
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-6">

@@ -16,6 +16,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppValidationRouteImport } from './routes/app.validation'
 import { Route as AppUsersRouteImport } from './routes/app.users'
+import { Route as AppTraitementRouteImport } from './routes/app.traitement'
 import { Route as AppMeasureRouteImport } from './routes/app.measure'
 import { Route as AppImportRouteImport } from './routes/app.import'
 import { Route as AppHierarchieRouteImport } from './routes/app.hierarchie'
@@ -63,6 +64,11 @@ const AppValidationRoute = AppValidationRouteImport.update({
 const AppUsersRoute = AppUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTraitementRoute = AppTraitementRouteImport.update({
+  id: '/traitement',
+  path: '/traitement',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMeasureRoute = AppMeasureRouteImport.update({
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/traitement': typeof AppTraitementRoute
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
   '/app/': typeof AppIndexRoute
@@ -168,6 +175,7 @@ export interface FileRoutesByTo {
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/traitement': typeof AppTraitementRoute
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
   '/app': typeof AppIndexRoute
@@ -191,6 +199,7 @@ export interface FileRoutesById {
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/traitement': typeof AppTraitementRoute
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
   '/app/': typeof AppIndexRoute
@@ -215,6 +224,7 @@ export interface FileRouteTypes {
     | '/app/hierarchie'
     | '/app/import'
     | '/app/measure'
+    | '/app/traitement'
     | '/app/users'
     | '/app/validation'
     | '/app/'
@@ -236,6 +246,7 @@ export interface FileRouteTypes {
     | '/app/hierarchie'
     | '/app/import'
     | '/app/measure'
+    | '/app/traitement'
     | '/app/users'
     | '/app/validation'
     | '/app'
@@ -258,6 +269,7 @@ export interface FileRouteTypes {
     | '/app/hierarchie'
     | '/app/import'
     | '/app/measure'
+    | '/app/traitement'
     | '/app/users'
     | '/app/validation'
     | '/app/'
@@ -328,6 +340,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/app/users'
       preLoaderRoute: typeof AppUsersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/traitement': {
+      id: '/app/traitement'
+      path: '/traitement'
+      fullPath: '/app/traitement'
+      preLoaderRoute: typeof AppTraitementRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/measure': {
@@ -431,6 +450,7 @@ interface AppRouteChildren {
   AppHierarchieRoute: typeof AppHierarchieRoute
   AppImportRoute: typeof AppImportRoute
   AppMeasureRoute: typeof AppMeasureRoute
+  AppTraitementRoute: typeof AppTraitementRoute
   AppUsersRoute: typeof AppUsersRoute
   AppValidationRoute: typeof AppValidationRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -446,6 +466,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppHierarchieRoute: AppHierarchieRoute,
   AppImportRoute: AppImportRoute,
   AppMeasureRoute: AppMeasureRoute,
+  AppTraitementRoute: AppTraitementRoute,
   AppUsersRoute: AppUsersRoute,
   AppValidationRoute: AppValidationRoute,
   AppIndexRoute: AppIndexRoute,

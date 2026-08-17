@@ -16,11 +16,13 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppValidationRouteImport } from './routes/app.validation'
 import { Route as AppUsersRouteImport } from './routes/app.users'
+import { Route as AppTraitementRouteImport } from './routes/app.traitement'
 import { Route as AppMeasureRouteImport } from './routes/app.measure'
 import { Route as AppImportRouteImport } from './routes/app.import'
 import { Route as AppHierarchieRouteImport } from './routes/app.hierarchie'
 import { Route as AppDebugRouteImport } from './routes/app.debug'
 import { Route as AppChangePasswordRouteImport } from './routes/app.change-password'
+import { Route as AppAssistantRouteImport } from './routes/app.assistant'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as AppParcellesIndexRouteImport } from './routes/app.parcelles.index'
@@ -64,6 +66,11 @@ const AppUsersRoute = AppUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTraitementRoute = AppTraitementRouteImport.update({
+  id: '/traitement',
+  path: '/traitement',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMeasureRoute = AppMeasureRouteImport.update({
   id: '/measure',
   path: '/measure',
@@ -87,6 +94,11 @@ const AppDebugRoute = AppDebugRouteImport.update({
 const AppChangePasswordRoute = AppChangePasswordRouteImport.update({
   id: '/change-password',
   path: '/change-password',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAssistantRoute = AppAssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
   getParentRoute: () => AppRoute,
 } as any)
 const Char91DotwellKnownChar93OauthProtectedResourceRoute =
@@ -135,11 +147,13 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/app/assistant': typeof AppAssistantRoute
   '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/traitement': typeof AppTraitementRoute
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
   '/app/': typeof AppIndexRoute
@@ -155,11 +169,13 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/app/assistant': typeof AppAssistantRoute
   '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/traitement': typeof AppTraitementRoute
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
   '/app': typeof AppIndexRoute
@@ -177,11 +193,13 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/app/assistant': typeof AppAssistantRoute
   '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/traitement': typeof AppTraitementRoute
   '/app/users': typeof AppUsersRoute
   '/app/validation': typeof AppValidationRoute
   '/app/': typeof AppIndexRoute
@@ -200,11 +218,13 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/app/assistant'
     | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
     | '/app/import'
     | '/app/measure'
+    | '/app/traitement'
     | '/app/users'
     | '/app/validation'
     | '/app/'
@@ -220,11 +240,13 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/app/assistant'
     | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
     | '/app/import'
     | '/app/measure'
+    | '/app/traitement'
     | '/app/users'
     | '/app/validation'
     | '/app'
@@ -241,11 +263,13 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/app/assistant'
     | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
     | '/app/import'
     | '/app/measure'
+    | '/app/traitement'
     | '/app/users'
     | '/app/validation'
     | '/app/'
@@ -318,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppUsersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/traitement': {
+      id: '/app/traitement'
+      path: '/traitement'
+      fullPath: '/app/traitement'
+      preLoaderRoute: typeof AppTraitementRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/measure': {
       id: '/app/measure'
       path: '/measure'
@@ -351,6 +382,13 @@ declare module '@tanstack/react-router' {
       path: '/change-password'
       fullPath: '/app/change-password'
       preLoaderRoute: typeof AppChangePasswordRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/assistant': {
+      id: '/app/assistant'
+      path: '/assistant'
+      fullPath: '/app/assistant'
+      preLoaderRoute: typeof AppAssistantRouteImport
       parentRoute: typeof AppRoute
     }
     '/.well-known/oauth-protected-resource': {
@@ -406,11 +444,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppAssistantRoute: typeof AppAssistantRoute
   AppChangePasswordRoute: typeof AppChangePasswordRoute
   AppDebugRoute: typeof AppDebugRoute
   AppHierarchieRoute: typeof AppHierarchieRoute
   AppImportRoute: typeof AppImportRoute
   AppMeasureRoute: typeof AppMeasureRoute
+  AppTraitementRoute: typeof AppTraitementRoute
   AppUsersRoute: typeof AppUsersRoute
   AppValidationRoute: typeof AppValidationRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -420,11 +460,13 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAssistantRoute: AppAssistantRoute,
   AppChangePasswordRoute: AppChangePasswordRoute,
   AppDebugRoute: AppDebugRoute,
   AppHierarchieRoute: AppHierarchieRoute,
   AppImportRoute: AppImportRoute,
   AppMeasureRoute: AppMeasureRoute,
+  AppTraitementRoute: AppTraitementRoute,
   AppUsersRoute: AppUsersRoute,
   AppValidationRoute: AppValidationRoute,
   AppIndexRoute: AppIndexRoute,

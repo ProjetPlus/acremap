@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { useNavigate, Outlet } from "@tanstack/react-router";
 import { notificationPermission, requestNotificationPermission } from "@/lib/feedback";
 import { initSync } from "@/lib/sync";
+import { startOfflineWarmup } from "@/lib/offline";
 
 export const Route = createFileRoute("/app")({
   component: AppLayout,
@@ -13,10 +14,14 @@ export const Route = createFileRoute("/app")({
 const NAV: { to: string; label: string; short: string; icon: string; admin?: boolean }[] = [
   { to: "/app", label: "Tableau de bord", short: "Accueil", icon: "home" },
   { to: "/app/parcelles", label: "Parcelles & levés", short: "Parcelles", icon: "map" },
+  { to: "/app/import", label: "Importer des fichiers", short: "Import", icon: "upload" },
+  { to: "/app/traitement", label: "Traitement & morcellement", short: "Traiter", icon: "tree" },
   { to: "/app/hierarchie", label: "Hiérarchie", short: "Hiérarchie", icon: "tree" },
+  { to: "/app/assistant", label: "Assistant IA", short: "IA", icon: "sparkle" },
   { to: "/app/validation", label: "Validation", short: "Valider", icon: "check", admin: true },
   { to: "/app/users", label: "Utilisateurs", short: "Comptes", icon: "users", admin: true },
 ];
+
 
 function AppLayout() {
   const user = useAuth((s) => s.user);
@@ -51,7 +56,7 @@ function AppLayout() {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
 
-  useEffect(() => { setNotifPerm(notificationPermission()); initSync(); }, []);
+  useEffect(() => { setNotifPerm(notificationPermission()); initSync(); startOfflineWarmup(); }, []);
 
   if (!hydrated || !user) return null;
   const items = NAV.filter((n) => !n.admin || user.role === "admin");
@@ -96,7 +101,9 @@ function AppLayout() {
           )}
           <div className="px-3 py-2 text-xs">
             <div className="font-semibold text-sidebar-foreground">{user.fullName}</div>
-            <div className="text-sidebar-foreground/60 capitalize">{user.role}</div>
+            <div className="text-sidebar-foreground/60">
+              {user.role === "admin" ? "Super administrateur — accès total" : user.role === "agent" ? "Agent de terrain" : "Lecture seule"}
+            </div>
           </div>
           <button onClick={handleSignOut}
             className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-sidebar-accent text-sidebar-foreground/85">
@@ -153,6 +160,8 @@ function Icon({ name }: { name: string }) {
     case "map": return <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2"><path d="M9 4l-6 2v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14" /></svg>;
     case "tree": return <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2"><path d="M5 6h4M5 12h4M5 18h4M9 6v12M13 6h6M13 12h6M13 18h6" /></svg>;
     case "check": return <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2"><path d="M5 12l5 5L20 7" /></svg>;
+    case "upload": return <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2"><path d="M12 16V4M7 9l5-5 5 5M4 17v3h16v-3" /></svg>;
+    case "sparkle": return <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2"><path d="M12 3l1.8 4.7L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" /></svg>;
     case "users": return <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2"><circle cx="9" cy="8" r="3" /><path d="M3 20c0-3 3-5 6-5s6 2 6 5M16 11a3 3 0 100-6M21 20c0-2-2-4-5-4" /></svg>;
     default: return null;
   }

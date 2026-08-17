@@ -13,10 +13,14 @@ export const Route = createFileRoute("/app")({
 const NAV: { to: string; label: string; short: string; icon: string; admin?: boolean }[] = [
   { to: "/app", label: "Tableau de bord", short: "Accueil", icon: "home" },
   { to: "/app/parcelles", label: "Parcelles & levés", short: "Parcelles", icon: "map" },
+  { to: "/app/import", label: "Importer des fichiers", short: "Import", icon: "upload" },
+  { to: "/app/traitement", label: "Traitement & morcellement", short: "Traiter", icon: "tree" },
   { to: "/app/hierarchie", label: "Hiérarchie", short: "Hiérarchie", icon: "tree" },
+  { to: "/app/assistant", label: "Assistant IA", short: "IA", icon: "sparkle" },
   { to: "/app/validation", label: "Validation", short: "Valider", icon: "check", admin: true },
   { to: "/app/users", label: "Utilisateurs", short: "Comptes", icon: "users", admin: true },
 ];
+
 
 function AppLayout() {
   const user = useAuth((s) => s.user);

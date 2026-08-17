@@ -8,6 +8,7 @@ import {
   haversine, polygonAreaM2, polygonPerimeterM, startWatch,
 } from "@/lib/gps";
 import { db, isBrowser } from "@/lib/db";
+import { prefetchTilesAround, keepScreenAwake } from "@/lib/offline";
 import { useAuth } from "@/lib/auth";
 import { formatArea, formatDistance } from "@/lib/format";
 import { feedbackError, feedbackMark, feedbackSuccess, unlockAudio, notify, requestNotificationPermission } from "@/lib/feedback";
@@ -59,6 +60,8 @@ function MeasurePage() {
   const stablePosRef = useRef<GpsPoint | null>(null);
   const watchRef = useRef<{ stop: () => void } | null>(null);
   const pausedRef = useRef(false);
+  const wakeRef = useRef<{ release: () => void } | null>(null);
+  useEffect(() => () => { wakeRef.current?.release(); }, []);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   useEffect(() => {
@@ -129,6 +132,16 @@ function MeasurePage() {
     setTrace([]);
     setFilteredCur(null);
     setRunning(true);
+    // Garde l'écran allumé pendant le levé (continuité du tracé)
+    void keepScreenAwake().then((w) => { wakeRef.current = w; });
+    // Pré-chargement des tuiles autour de la position de départ (navigation hors ligne)
+    if (isBrowser() && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { void prefetchTilesAround(pos.coords.latitude, pos.coords.longitude, 3); },
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000 },
+      );
+    }
   }
   function togglePause() {
     setPaused((p) => {

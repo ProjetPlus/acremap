@@ -21,6 +21,7 @@ import { Route as AppImportRouteImport } from './routes/app.import'
 import { Route as AppHierarchieRouteImport } from './routes/app.hierarchie'
 import { Route as AppDebugRouteImport } from './routes/app.debug'
 import { Route as AppChangePasswordRouteImport } from './routes/app.change-password'
+import { Route as AppAssistantRouteImport } from './routes/app.assistant'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as AppParcellesIndexRouteImport } from './routes/app.parcelles.index'
@@ -89,6 +90,11 @@ const AppChangePasswordRoute = AppChangePasswordRouteImport.update({
   path: '/change-password',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAssistantRoute = AppAssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
+  getParentRoute: () => AppRoute,
+} as any)
 const Char91DotwellKnownChar93OauthProtectedResourceRoute =
   Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
     id: '/.well-known/oauth-protected-resource',
@@ -135,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/app/assistant': typeof AppAssistantRoute
   '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
@@ -155,6 +162,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/app/assistant': typeof AppAssistantRoute
   '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/app/assistant': typeof AppAssistantRoute
   '/app/change-password': typeof AppChangePasswordRoute
   '/app/debug': typeof AppDebugRoute
   '/app/hierarchie': typeof AppHierarchieRoute
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/app/assistant'
     | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
@@ -220,6 +230,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/app/assistant'
     | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
@@ -241,6 +252,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/app/assistant'
     | '/app/change-password'
     | '/app/debug'
     | '/app/hierarchie'
@@ -353,6 +365,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChangePasswordRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/assistant': {
+      id: '/app/assistant'
+      path: '/assistant'
+      fullPath: '/app/assistant'
+      preLoaderRoute: typeof AppAssistantRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/.well-known/oauth-protected-resource': {
       id: '/.well-known/oauth-protected-resource'
       path: '/.well-known/oauth-protected-resource'
@@ -406,6 +425,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppAssistantRoute: typeof AppAssistantRoute
   AppChangePasswordRoute: typeof AppChangePasswordRoute
   AppDebugRoute: typeof AppDebugRoute
   AppHierarchieRoute: typeof AppHierarchieRoute
@@ -420,6 +440,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAssistantRoute: AppAssistantRoute,
   AppChangePasswordRoute: AppChangePasswordRoute,
   AppDebugRoute: AppDebugRoute,
   AppHierarchieRoute: AppHierarchieRoute,

@@ -53,7 +53,18 @@ function AppLayout() {
       navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
       return;
     }
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      // Recherche immédiate d'une nouvelle version publiée (évite une app figée sur l'ancien build)
+      reg.update().catch(() => {});
+      const iv = setInterval(() => reg.update().catch(() => {}), 60_000);
+      let reloading = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (reloading) return;
+        reloading = true;
+        clearInterval(iv);
+        window.location.reload();
+      });
+    }).catch(() => {});
   }, []);
 
   useEffect(() => { setNotifPerm(notificationPermission()); initSync(); startOfflineWarmup(); }, []);

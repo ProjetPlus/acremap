@@ -1,5 +1,5 @@
 // AcreMap Service Worker — hors ligne complet (app shell + assets + tuiles) + notifications
-const CACHE = "acremap-v3";
+const CACHE = "acremap-v5";
 const TILE_CACHE = "acremap-tiles-v1";
 const SHELL = ["/", "/login", "/app", "/manifest.webmanifest", "/favicon.png", "/icon-192.png", "/icon-512.png"];
 
@@ -25,6 +25,16 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+
+  // 0) Jamais de cache pour les appels serveur / API / Supabase (auth, données live)
+  if (
+    url.pathname.startsWith("/_serverFn") ||
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/.mcp") ||
+    /supabase\.co$/.test(url.hostname)
+  ) {
+    return;
+  }
 
   // 1) Tuiles cartographiques : cache-first, persistant (utilisation hors ligne sur le terrain)
   if (isTile(url)) {

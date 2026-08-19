@@ -85,10 +85,11 @@ function MeasurePage() {
     if (!running) return;
     setError(null);
     const handle = startWatch((raw, filtered) => {
+      const cfg = cfgRef.current;
       setCurrent(raw);
-      const accepted = raw.accuracy <= DEFAULT_GPS_CONFIG.maxAcceptableAccuracy;
+      const accepted = raw.accuracy <= cfg.maxAcceptableAccuracy;
       if (accepted) {
-        if (raw.accuracy < bestAcc) setBestAcc(raw.accuracy);
+        setBestAcc((b) => Math.min(b, raw.accuracy));
         setAccSamples((s) => [...s.slice(-199), raw.accuracy]);
         setAcceptedCount((c) => c + 1);
       } else {
@@ -107,9 +108,10 @@ function MeasurePage() {
       }
 
       // Anti-dérive terrain : une nouvelle position n'est acceptée que si le
-      // déplacement dépasse largement l'incertitude GPS. À l'arrêt, le point
-      // affiché et la trace restent verrouillés au dernier point stable.
-      const minMove = Math.max(8, raw.accuracy * 2, filtered.accuracy * 2.5);
+      // déplacement dépasse largement l'incertitude GPS — seuil issu de la
+      // calibration réelle de l'appareil quand elle est disponible.
+      const calibratedMin = calibration?.recommendedMinMoveM ?? 8;
+      const minMove = Math.max(calibratedMin, raw.accuracy * 2, filtered.accuracy * 2.5);
       if (haversine(stable, filtered) < minMove) {
         setDistanceFromLast(0);
         return;
@@ -123,8 +125,8 @@ function MeasurePage() {
         const last = pts[pts.length - 1];
         const d = haversine(last, filtered);
         setDistanceFromLast(d);
-        if (autoMark100 && d >= DEFAULT_GPS_CONFIG.autoMarkEveryMeters &&
-            (!lastAutoRef.current || haversine(lastAutoRef.current, filtered) >= DEFAULT_GPS_CONFIG.autoMarkEveryMeters)) {
+        if (autoMark100 && d >= cfg.autoMarkEveryMeters &&
+            (!lastAutoRef.current || haversine(lastAutoRef.current, filtered) >= cfg.autoMarkEveryMeters)) {
           lastAutoRef.current = filtered;
           feedbackMark();
           notify("Point auto-marqué", `Point ${pts.length + 1} enregistré à 100 m du précédent.`, { tag: "auto-mark" });
@@ -136,10 +138,35 @@ function MeasurePage() {
         }
         return pts;
       });
-    });
+    }, cfgRef.current);
     watchRef.current = handle;
     return () => { handle.stop(); watchRef.current = null; };
-  }, [running, autoMark100]);
+  }, [running, autoMark100, calibration]);
+
+  /** Calibration statique : l'opérateur reste immobile pendant ~20 s. */
+  async function calibrate() {
+    setError(null);
+    setCalibrating(true);
+    setCalProgress({ elapsedMs: 0, samples: 0, currentAccuracyM: 0, scatterM: 0 });
+    try {
+      await unlockAudio();
+      const res = await runCalibration((p) =>
+        setCalProgress({ elapsedMs: p.elapsedMs, samples: p.samples, currentAccuracyM: p.currentAccuracyM, scatterM: p.scatterM }),
+      );
+      setCalibration(res);
+      setGpsConfig(configFromCalibration(res));
+      setBestAcc(res.bestAccuracyM);
+      if (res.quality === "insuffisant") feedbackError(); else feedbackSuccess();
+      // Les tuiles de la zone calibrée sont mises en cache dès maintenant.
+      void prefetchTilesAround(res.center.lat, res.center.lng, 3);
+    } catch (e: any) {
+      feedbackError();
+      setError(e?.message ?? "Calibration impossible.");
+    } finally {
+      setCalibrating(false);
+      setCalProgress(null);
+    }
+  }
 
   async function startGps() {
     await unlockAudio();

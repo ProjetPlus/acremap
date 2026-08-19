@@ -6,6 +6,9 @@ import { MapView } from "@/components/MapView";
 import {
   DEFAULT_GPS_CONFIG, classifyAccuracy, estimateDeviceTier,
   haversine, polygonAreaM2, polygonPerimeterM, startWatch,
+  runCalibration, configFromCalibration, validateFieldMeasurement,
+  CALIBRATION_DURATION_MS,
+  type CalibrationResult, type FieldValidation, type GpsConfig,
 } from "@/lib/gps";
 import { db, isBrowser } from "@/lib/db";
 import { prefetchTilesAround, keepScreenAwake } from "@/lib/offline";
@@ -16,6 +19,7 @@ import type { GpsPoint, Measurement, MeasurementPoint } from "@/lib/types";
 import {
   MapPin, Pause, Play, Undo2, Save, Send, Settings2, Layers, X,
   ChevronDown, ChevronUp, Crosshair, AlertTriangle, Activity,
+  CheckCircle2, XCircle, Loader2, Target,
 } from "lucide-react";
 
 const searchSchema = z.object({ parcelleId: z.string().optional() });

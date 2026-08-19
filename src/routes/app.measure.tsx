@@ -60,13 +60,26 @@ function MeasurePage() {
   const [statsOpen, setStatsOpen] = useState(true);
   const [qaOpen, setQaOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  // --- Calibration GPS terrain ---
+  const [calibrating, setCalibrating] = useState(false);
+  const [calProgress, setCalProgress] = useState<{ elapsedMs: number; samples: number; currentAccuracyM: number; scatterM: number } | null>(null);
+  const [calibration, setCalibration] = useState<CalibrationResult | null>(null);
+  const [gpsConfig, setGpsConfig] = useState<GpsConfig>(DEFAULT_GPS_CONFIG);
+  // --- Pause / reprise ---
+  const [pauses, setPauses] = useState<{ startedAt: number; endedAt?: number; durationMs?: number }[]>([]);
+  // --- Contrôle terrain avant enregistrement ---
+  const [fieldCheck, setFieldCheck] = useState<FieldValidation | null>(null);
+  const [checkOpen, setCheckOpen] = useState(false);
+  const [pendingSubmit, setPendingSubmit] = useState(false);
   const lastAutoRef = useRef<GpsPoint | null>(null);
   const stablePosRef = useRef<GpsPoint | null>(null);
   const watchRef = useRef<{ stop: () => void } | null>(null);
   const pausedRef = useRef(false);
+  const cfgRef = useRef<GpsConfig>(DEFAULT_GPS_CONFIG);
   const wakeRef = useRef<{ release: () => void } | null>(null);
   useEffect(() => () => { wakeRef.current?.release(); }, []);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
+  useEffect(() => { cfgRef.current = gpsConfig; }, [gpsConfig]);
 
   useEffect(() => {
     if (!running) return;

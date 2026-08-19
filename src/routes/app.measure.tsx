@@ -6,6 +6,9 @@ import { MapView } from "@/components/MapView";
 import {
   DEFAULT_GPS_CONFIG, classifyAccuracy, estimateDeviceTier,
   haversine, polygonAreaM2, polygonPerimeterM, startWatch,
+  runCalibration, configFromCalibration, validateFieldMeasurement,
+  CALIBRATION_DURATION_MS,
+  type CalibrationResult, type FieldValidation, type GpsConfig,
 } from "@/lib/gps";
 import { db, isBrowser } from "@/lib/db";
 import { prefetchTilesAround, keepScreenAwake } from "@/lib/offline";
@@ -16,6 +19,7 @@ import type { GpsPoint, Measurement, MeasurementPoint } from "@/lib/types";
 import {
   MapPin, Pause, Play, Undo2, Save, Send, Settings2, Layers, X,
   ChevronDown, ChevronUp, Crosshair, AlertTriangle, Activity,
+  CheckCircle2, XCircle, Loader2, Target,
 } from "lucide-react";
 
 const searchSchema = z.object({ parcelleId: z.string().optional() });
@@ -56,22 +60,36 @@ function MeasurePage() {
   const [statsOpen, setStatsOpen] = useState(true);
   const [qaOpen, setQaOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  // --- Calibration GPS terrain ---
+  const [calibrating, setCalibrating] = useState(false);
+  const [calProgress, setCalProgress] = useState<{ elapsedMs: number; samples: number; currentAccuracyM: number; scatterM: number } | null>(null);
+  const [calibration, setCalibration] = useState<CalibrationResult | null>(null);
+  const [gpsConfig, setGpsConfig] = useState<GpsConfig>(DEFAULT_GPS_CONFIG);
+  // --- Pause / reprise ---
+  const [pauses, setPauses] = useState<{ startedAt: number; endedAt?: number; durationMs?: number }[]>([]);
+  // --- Contrôle terrain avant enregistrement ---
+  const [fieldCheck, setFieldCheck] = useState<FieldValidation | null>(null);
+  const [checkOpen, setCheckOpen] = useState(false);
+  const [pendingSubmit, setPendingSubmit] = useState(false);
   const lastAutoRef = useRef<GpsPoint | null>(null);
   const stablePosRef = useRef<GpsPoint | null>(null);
   const watchRef = useRef<{ stop: () => void } | null>(null);
   const pausedRef = useRef(false);
+  const cfgRef = useRef<GpsConfig>(DEFAULT_GPS_CONFIG);
   const wakeRef = useRef<{ release: () => void } | null>(null);
   useEffect(() => () => { wakeRef.current?.release(); }, []);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
+  useEffect(() => { cfgRef.current = gpsConfig; }, [gpsConfig]);
 
   useEffect(() => {
     if (!running) return;
     setError(null);
     const handle = startWatch((raw, filtered) => {
+      const cfg = cfgRef.current;
       setCurrent(raw);
-      const accepted = raw.accuracy <= DEFAULT_GPS_CONFIG.maxAcceptableAccuracy;
+      const accepted = raw.accuracy <= cfg.maxAcceptableAccuracy;
       if (accepted) {
-        if (raw.accuracy < bestAcc) setBestAcc(raw.accuracy);
+        setBestAcc((b) => Math.min(b, raw.accuracy));
         setAccSamples((s) => [...s.slice(-199), raw.accuracy]);
         setAcceptedCount((c) => c + 1);
       } else {
@@ -90,9 +108,10 @@ function MeasurePage() {
       }
 
       // Anti-dérive terrain : une nouvelle position n'est acceptée que si le
-      // déplacement dépasse largement l'incertitude GPS. À l'arrêt, le point
-      // affiché et la trace restent verrouillés au dernier point stable.
-      const minMove = Math.max(8, raw.accuracy * 2, filtered.accuracy * 2.5);
+      // déplacement dépasse largement l'incertitude GPS — seuil issu de la
+      // calibration réelle de l'appareil quand elle est disponible.
+      const calibratedMin = calibration?.recommendedMinMoveM ?? 8;
+      const minMove = Math.max(calibratedMin, raw.accuracy * 2, filtered.accuracy * 2.5);
       if (haversine(stable, filtered) < minMove) {
         setDistanceFromLast(0);
         return;
@@ -106,8 +125,8 @@ function MeasurePage() {
         const last = pts[pts.length - 1];
         const d = haversine(last, filtered);
         setDistanceFromLast(d);
-        if (autoMark100 && d >= DEFAULT_GPS_CONFIG.autoMarkEveryMeters &&
-            (!lastAutoRef.current || haversine(lastAutoRef.current, filtered) >= DEFAULT_GPS_CONFIG.autoMarkEveryMeters)) {
+        if (autoMark100 && d >= cfg.autoMarkEveryMeters &&
+            (!lastAutoRef.current || haversine(lastAutoRef.current, filtered) >= cfg.autoMarkEveryMeters)) {
           lastAutoRef.current = filtered;
           feedbackMark();
           notify("Point auto-marqué", `Point ${pts.length + 1} enregistré à 100 m du précédent.`, { tag: "auto-mark" });
@@ -119,10 +138,35 @@ function MeasurePage() {
         }
         return pts;
       });
-    });
+    }, cfgRef.current);
     watchRef.current = handle;
     return () => { handle.stop(); watchRef.current = null; };
-  }, [running, autoMark100]);
+  }, [running, autoMark100, calibration]);
+
+  /** Calibration statique : l'opérateur reste immobile pendant ~20 s. */
+  async function calibrate() {
+    setError(null);
+    setCalibrating(true);
+    setCalProgress({ elapsedMs: 0, samples: 0, currentAccuracyM: 0, scatterM: 0 });
+    try {
+      await unlockAudio();
+      const res = await runCalibration((p) =>
+        setCalProgress({ elapsedMs: p.elapsedMs, samples: p.samples, currentAccuracyM: p.currentAccuracyM, scatterM: p.scatterM }),
+      );
+      setCalibration(res);
+      setGpsConfig(configFromCalibration(res));
+      setBestAcc(res.bestAccuracyM);
+      if (res.quality === "insuffisant") feedbackError(); else feedbackSuccess();
+      // Les tuiles de la zone calibrée sont mises en cache dès maintenant.
+      void prefetchTilesAround(res.center.lat, res.center.lng, 3);
+    } catch (e: any) {
+      feedbackError();
+      setError(e?.message ?? "Calibration impossible.");
+    } finally {
+      setCalibrating(false);
+      setCalProgress(null);
+    }
+  }
 
   async function startGps() {
     await unlockAudio();
@@ -146,8 +190,22 @@ function MeasurePage() {
   function togglePause() {
     setPaused((p) => {
       const next = !p;
-      if (next) notify("Mesure en pause", "La trace est suspendue.", { tag: "pause" });
-      else { lastAutoRef.current = filteredCur ?? lastAutoRef.current; notify("Mesure reprise", "Continuez votre tracé.", { tag: "resume" }); }
+      const now = Date.now();
+      if (next) {
+        // Pause : la trace est gelée et l'interruption est journalisée.
+        setPauses((ps) => [...ps, { startedAt: now }]);
+        notify("Mesure en pause", "La trace est suspendue. Le tracé reprendra à votre position réelle.", { tag: "pause" });
+      } else {
+        setPauses((ps) => ps.map((x, i) =>
+          i === ps.length - 1 && !x.endedAt ? { ...x, endedAt: now, durationMs: now - x.startedAt } : x,
+        ));
+        // Reprise : on repart de la position réelle et non du dernier point
+        // gelé, sinon un déplacement fait pendant la pause créerait un faux
+        // segment rectiligne dans le tracé.
+        stablePosRef.current = null;
+        lastAutoRef.current = filteredCur ?? lastAutoRef.current;
+        notify("Mesure reprise", "Continuez votre tracé.", { tag: "resume" });
+      }
       return next;
     });
   }
@@ -156,16 +214,15 @@ function MeasurePage() {
     setError(null);
     // Marquage INSTANTANÉ — un clic = un point ajouté immédiatement.
     // Utilise la dernière position filtrée (Kalman) si dispo, sinon le brut.
-    // Aucun compteur d'échantillons, aucun overlay bloquant.
     const src = filteredCur ?? current;
     if (!src) {
       feedbackError();
       setError("Position GPS non encore reçue. Patientez quelques secondes.");
       return;
     }
-    if (src.accuracy > DEFAULT_GPS_CONFIG.maxAcceptableAccuracy * 2) {
+    if (src.accuracy > gpsConfig.maxAcceptableAccuracy * 2) {
       feedbackError();
-      setError(`Précision insuffisante (±${src.accuracy.toFixed(0)} m). Attendez un meilleur signal.`);
+      setError(`Précision insuffisante (±${src.accuracy.toFixed(0)} m, seuil calibré ${gpsConfig.maxAcceptableAccuracy} m). Attendez un meilleur signal.`);
       return;
     }
     const p: MeasurementPoint = {
@@ -187,10 +244,33 @@ function MeasurePage() {
     lastAutoRef.current = null;
   }
 
+  /** Ouvre le contrôle terrain : rien n'est enregistré avant sa réussite. */
+  function runFieldCheck(submit: boolean) {
+    const res = validateFieldMeasurement(points, {
+      maxAcceptableAccuracyM: gpsConfig.maxAcceptableAccuracy,
+      calibration,
+      acceptedSamples: acceptedCount,
+    });
+    setFieldCheck(res);
+    setPendingSubmit(submit);
+    setCheckOpen(true);
+    if (!res.ok) feedbackError();
+  }
+
   async function save(submit: boolean) {
     if (!user) return;
-    if (points.length < 3) { setError("Au moins 3 points sont nécessaires."); return; }
     if (!isBrowser()) return;
+    const check = validateFieldMeasurement(points, {
+      maxAcceptableAccuracyM: gpsConfig.maxAcceptableAccuracy,
+      calibration,
+      acceptedSamples: acceptedCount,
+    });
+    if (!check.ok) {
+      setFieldCheck(check);
+      setCheckOpen(true);
+      feedbackError();
+      return;
+    }
     const accVals = accSamples.filter((a) => a < 999).sort((a, b) => a - b);
     const median = accVals[Math.floor(accVals.length / 2)] ?? bestAcc;
     const m: Measurement = {
@@ -205,20 +285,41 @@ function MeasurePage() {
       unit,
       deviceProfile: {
         userAgent: navigator.userAgent, platform: navigator.platform,
-        estimatedTier: estimateDeviceTier(bestAcc),
+        estimatedTier: calibration?.tier ?? estimateDeviceTier(bestAcc),
         bestAccuracyM: bestAcc, medianAccuracyM: median,
         samplesCount: acceptedCount + rejectedCount,
       },
       qa: {
         acceptedCount, rejectedCount,
-        maxAcceptableAccuracyM: DEFAULT_GPS_CONFIG.maxAcceptableAccuracy,
+        maxAcceptableAccuracyM: gpsConfig.maxAcceptableAccuracy,
         bestAccuracyM: bestAcc, medianAccuracyM: median,
         liveAccuracyM: filteredCur?.accuracy,
         history: qaHistory.map((q) => ({ ts: q.ts, accuracyM: q.acc, accepted: q.ok })),
+        calibration: calibration
+          ? {
+              samples: calibration.samples,
+              bestAccuracyM: calibration.bestAccuracyM,
+              medianAccuracyM: calibration.medianAccuracyM,
+              scatterM: calibration.scatterM,
+              recommendedMaxAccuracyM: calibration.recommendedMaxAccuracyM,
+              tier: calibration.tier,
+              quality: calibration.quality,
+              at: Date.now() - calibration.durationMs,
+            }
+          : null,
+        pauses,
+        fieldCheck: {
+          ok: check.ok,
+          closureM: check.closureM,
+          minSegmentM: check.minSegmentM,
+          maxAccuracyM: check.maxAccuracyM,
+          issues: check.issues,
+        },
       },
     };
     await db().measurements.put(m);
     feedbackSuccess();
+    setCheckOpen(false);
     if (submit) await notify("Mesure soumise", `Levé envoyé (${formatArea(m.areaM2, m.unit)}).`, { tag: "submit" });
     navigate({ to: "/app/parcelles/$id", params: { id: m.id } });
   }

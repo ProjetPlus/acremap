@@ -102,4 +102,25 @@ export interface MeasurementQA {
   medianAccuracyM: number;
   liveAccuracyM?: number;
   history: { ts: number; accuracyM: number; accepted: boolean }[];
+  /** Profil de précision réel mesuré sur place avant le levé */
+  calibration?: {
+    samples: number;
+    bestAccuracyM: number;
+    medianAccuracyM: number;
+    scatterM: number;
+    recommendedMaxAccuracyM: number;
+    tier: string;
+    quality: string;
+    at: number;
+  } | null;
+  /** Journal des interruptions de levé (pause / reprise) */
+  pauses?: { startedAt: number; endedAt?: number; durationMs?: number }[];
+  /** Résultat du contrôle terrain effectué avant enregistrement */
+  fieldCheck?: {
+    ok: boolean;
+    closureM: number;
+    minSegmentM: number;
+    maxAccuracyM: number;
+    issues: { level: string; code: string; message: string }[];
+  } | null;
 }

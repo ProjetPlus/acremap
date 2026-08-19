@@ -218,3 +218,274 @@ export function captureStaticPoint(
     );
   });
 }
+
+// ============================================================================
+// CALIBRATION GPS TERRAIN
+// ----------------------------------------------------------------------------
+// Avant chaque levé, l'appareil doit être caractérisé sur place : la précision
+// annoncée par le navigateur est optimiste et varie fortement (canopée, nuages,
+// bâti). On reste immobile quelques secondes, on mesure la dispersion réelle
+// des positions (scatter) et on en déduit un seuil d'acceptation honnête.
+// ============================================================================
+
+export interface CalibrationResult {
+  samples: number;
+  rejected: number;
+  bestAccuracyM: number;
+  medianAccuracyM: number;
+  /** dispersion réelle observée (2 x écart-type des positions, en mètres) */
+  scatterM: number;
+  /** seuil d'acceptation recommandé pour ce levé */
+  recommendedMaxAccuracyM: number;
+  /** déplacement minimal à dépasser pour considérer un vrai mouvement */
+  recommendedMinMoveM: number;
+  tier: "L1" | "L1+L5" | "unknown";
+  quality: "excellent" | "bon" | "acceptable" | "insuffisant";
+  durationMs: number;
+  center: { lat: number; lng: number };
+}
+
+export const CALIBRATION_DURATION_MS = 20_000;
+export const CALIBRATION_MIN_SAMPLES = 8;
+
+/** Écart-type des positions converti en mètres (dispersion réelle du récepteur). */
+export function positionScatterM(samples: GpsPoint[]): number {
+  if (samples.length < 2) return 0;
+  const mLat = 111_320;
+  const meanLat = samples.reduce((s, p) => s + p.lat, 0) / samples.length;
+  const meanLng = samples.reduce((s, p) => s + p.lng, 0) / samples.length;
+  const mLng = mLat * Math.cos((meanLat * Math.PI) / 180);
+  let sum = 0;
+  for (const p of samples) {
+    const dx = (p.lng - meanLng) * mLng;
+    const dy = (p.lat - meanLat) * mLat;
+    sum += dx * dx + dy * dy;
+  }
+  return Math.sqrt(sum / samples.length);
+}
+
+function median(values: number[]): number {
+  if (!values.length) return 0;
+  const s = [...values].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}
+
+function calibrationQuality(effective: number): CalibrationResult["quality"] {
+  if (effective <= 4) return "excellent";
+  if (effective <= 8) return "bon";
+  if (effective <= 15) return "acceptable";
+  return "insuffisant";
+}
+
+/**
+ * Calibration statique : l'opérateur reste immobile pendant `durationMs`.
+ * Renvoie un profil de précision réel + les seuils à utiliser pour ce levé.
+ */
+export function runCalibration(
+  onProgress?: (state: { elapsedMs: number; durationMs: number; samples: number; currentAccuracyM: number; scatterM: number }) => void,
+  durationMs: number = CALIBRATION_DURATION_MS,
+): Promise<CalibrationResult> {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      reject(new Error("Géolocalisation indisponible sur cet appareil."));
+      return;
+    }
+    const accepted: GpsPoint[] = [];
+    let rejected = 0;
+    const start = Date.now();
+    let watchId = -1;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = () => {
+      if (watchId >= 0) navigator.geolocation.clearWatch(watchId);
+      if (timer) clearTimeout(timer);
+      if (accepted.length < CALIBRATION_MIN_SAMPLES) {
+        reject(new Error(
+          `Signal GPS insuffisant (${accepted.length} relevés valides). Placez-vous en zone dégagée, hors couvert végétal, puis recommencez.`,
+        ));
+        return;
+      }
+      const accs = accepted.map((p) => p.accuracy);
+      const best = Math.min(...accs);
+      const med = median(accs);
+      const scatter = positionScatterM(accepted);
+      // Le seuil retenu combine ce que l'appareil annonce (médiane) et ce qu'il
+      // fait réellement (dispersion) : on ne peut pas être plus précis que
+      // l'agitation observée à l'arrêt.
+      const effective = Math.max(med, scatter * 2);
+      const center = weightedAverage(accepted);
+      resolve({
+        samples: accepted.length,
+        rejected,
+        bestAccuracyM: best,
+        medianAccuracyM: med,
+        scatterM: scatter,
+        recommendedMaxAccuracyM: Math.min(30, Math.max(6, Math.round(effective * 1.5))),
+        recommendedMinMoveM: Math.max(5, Math.round(effective * 1.5)),
+        tier: estimateDeviceTier(best),
+        quality: calibrationQuality(effective),
+        durationMs: Date.now() - start,
+        center: { lat: center.lat, lng: center.lng },
+      });
+    };
+
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const acc = pos.coords.accuracy ?? 999;
+        // Pendant la calibration on garde large (50 m) : le but est de mesurer
+        // le comportement réel, pas de filtrer.
+        if (acc <= 50) {
+          accepted.push({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: acc,
+            ts: pos.timestamp,
+            alt: pos.coords.altitude ?? null,
+          });
+        } else {
+          rejected++;
+        }
+        onProgress?.({
+          elapsedMs: Date.now() - start,
+          durationMs,
+          samples: accepted.length,
+          currentAccuracyM: acc,
+          scatterM: positionScatterM(accepted),
+        });
+      },
+      (err) => {
+        if (watchId >= 0) navigator.geolocation.clearWatch(watchId);
+        if (timer) clearTimeout(timer);
+        reject(new Error(
+          err.code === err.PERMISSION_DENIED
+            ? "Accès à la position refusé. Autorisez la géolocalisation pour AcreMap."
+            : "Impossible d'obtenir la position. Vérifiez que le GPS est activé.",
+        ));
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30_000 },
+    );
+    timer = setTimeout(finish, durationMs);
+  });
+}
+
+/** Configuration de levé dérivée d'une calibration réelle. */
+export function configFromCalibration(cal: CalibrationResult, base: GpsConfig = DEFAULT_GPS_CONFIG): GpsConfig {
+  return { ...base, maxAcceptableAccuracy: cal.recommendedMaxAccuracyM };
+}
+
+// ============================================================================
+// VALIDATION TERRAIN AVANT ENREGISTREMENT
+// ============================================================================
+
+export interface FieldIssue {
+  level: "blocking" | "warning";
+  code: string;
+  message: string;
+}
+
+export interface FieldValidation {
+  ok: boolean;
+  issues: FieldIssue[];
+  /** fermeture du polygone : distance entre le dernier et le premier point */
+  closureM: number;
+  minSegmentM: number;
+  maxAccuracyM: number;
+  areaM2: number;
+  perimeterM: number;
+}
+
+/** Vrai si les segments [a,b] et [c,d] se croisent (coordonnées projetées grossièrement). */
+function segmentsCross(
+  a: { lat: number; lng: number }, b: { lat: number; lng: number },
+  c: { lat: number; lng: number }, d: { lat: number; lng: number },
+): boolean {
+  const cross = (p: { lat: number; lng: number }, q: { lat: number; lng: number }, r: { lat: number; lng: number }) =>
+    (q.lng - p.lng) * (r.lat - p.lat) - (q.lat - p.lat) * (r.lng - p.lng);
+  const d1 = cross(c, d, a), d2 = cross(c, d, b), d3 = cross(a, b, c), d4 = cross(a, b, d);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+export function hasSelfIntersection(pts: { lat: number; lng: number }[]): boolean {
+  const n = pts.length;
+  if (n < 4) return false;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue; // segments adjacents via la fermeture
+      if (segmentsCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Contrôle terrain complet avant enregistrement d'un levé.
+ * Les problèmes `blocking` empêchent la soumission ; les `warning` sont
+ * signalés à l'opérateur mais n'empêchent pas d'enregistrer.
+ */
+export function validateFieldMeasurement(
+  points: MeasurementPoint[],
+  opts: { maxAcceptableAccuracyM?: number; calibration?: CalibrationResult | null; acceptedSamples?: number } = {},
+): FieldValidation {
+  const issues: FieldIssue[] = [];
+  const threshold = opts.maxAcceptableAccuracyM ?? DEFAULT_GPS_CONFIG.maxAcceptableAccuracy;
+  const areaM2 = polygonAreaM2(points);
+  const perimeterM = polygonPerimeterM(points);
+
+  if (points.length < 3) {
+    issues.push({ level: "blocking", code: "min_points", message: "Au moins 3 points sont nécessaires pour fermer une parcelle." });
+  }
+
+  const segs: number[] = [];
+  for (let i = 0; i < points.length && points.length >= 2; i++) {
+    segs.push(haversine(points[i], points[(i + 1) % points.length]));
+  }
+  const minSegmentM = segs.length ? Math.min(...segs) : 0;
+  const closureM = points.length >= 2 ? haversine(points[points.length - 1], points[0]) : 0;
+  const maxAccuracyM = points.length ? Math.max(...points.map((p) => p.accuracy)) : 0;
+
+  if (!opts.calibration) {
+    issues.push({ level: "warning", code: "no_calibration", message: "Aucune calibration GPS n'a été effectuée : la précision annoncée n'est pas vérifiée." });
+  } else if (opts.calibration.quality === "insuffisant") {
+    issues.push({ level: "warning", code: "poor_calibration", message: `Calibration faible (dispersion ±${opts.calibration.scatterM.toFixed(1)} m) : surface indicative.` });
+  }
+
+  if (maxAccuracyM > threshold * 2) {
+    issues.push({ level: "blocking", code: "point_accuracy", message: `Un point a été relevé avec ±${maxAccuracyM.toFixed(1)} m, au-delà du double du seuil (${threshold} m). Reprenez ce point.` });
+  } else if (maxAccuracyM > threshold) {
+    issues.push({ level: "warning", code: "point_accuracy_soft", message: `Précision la plus faible : ±${maxAccuracyM.toFixed(1)} m (seuil ${threshold} m).` });
+  }
+
+  if (points.length >= 3 && minSegmentM < Math.max(3, threshold / 2)) {
+    issues.push({ level: "warning", code: "short_segment", message: `Segment très court (${minSegmentM.toFixed(1)} m) : deux points sont peut-être en doublon.` });
+  }
+
+  if (points.length >= 4 && hasSelfIntersection(points)) {
+    issues.push({ level: "blocking", code: "self_intersection", message: "Le contour se croise lui-même. Corrigez l'ordre des points avant d'enregistrer." });
+  }
+
+  if (points.length >= 3 && areaM2 < 100) {
+    issues.push({ level: "blocking", code: "tiny_area", message: "Surface calculée inférieure à 100 m² : le contour est incohérent." });
+  }
+
+  if (points.length >= 3 && perimeterM > 0) {
+    // Indice de compacité : détecte les tracés « en aiguille » (points aberrants)
+    const compactness = (4 * Math.PI * areaM2) / (perimeterM * perimeterM);
+    if (compactness < 0.05) {
+      issues.push({ level: "warning", code: "degenerate_shape", message: "Contour très allongé ou aplati : vérifiez qu'aucun point n'est aberrant." });
+    }
+  }
+
+  if ((opts.acceptedSamples ?? 0) < 20) {
+    issues.push({ level: "warning", code: "few_samples", message: "Peu de relevés GPS acceptés : laissez le récepteur se stabiliser plus longtemps." });
+  }
+
+  return {
+    ok: !issues.some((i) => i.level === "blocking"),
+    issues,
+    closureM,
+    minSegmentM,
+    maxAccuracyM,
+    areaM2,
+    perimeterM,
+  };
+}

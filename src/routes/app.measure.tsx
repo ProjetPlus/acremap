@@ -190,8 +190,22 @@ function MeasurePage() {
   function togglePause() {
     setPaused((p) => {
       const next = !p;
-      if (next) notify("Mesure en pause", "La trace est suspendue.", { tag: "pause" });
-      else { lastAutoRef.current = filteredCur ?? lastAutoRef.current; notify("Mesure reprise", "Continuez votre tracé.", { tag: "resume" }); }
+      const now = Date.now();
+      if (next) {
+        // Pause : la trace est gelée et l'interruption est journalisée.
+        setPauses((ps) => [...ps, { startedAt: now }]);
+        notify("Mesure en pause", "La trace est suspendue. Le tracé reprendra à votre position réelle.", { tag: "pause" });
+      } else {
+        setPauses((ps) => ps.map((x, i) =>
+          i === ps.length - 1 && !x.endedAt ? { ...x, endedAt: now, durationMs: now - x.startedAt } : x,
+        ));
+        // Reprise : on repart de la position réelle et non du dernier point
+        // gelé, sinon un déplacement fait pendant la pause créerait un faux
+        // segment rectiligne dans le tracé.
+        stablePosRef.current = null;
+        lastAutoRef.current = filteredCur ?? lastAutoRef.current;
+        notify("Mesure reprise", "Continuez votre tracé.", { tag: "resume" });
+      }
       return next;
     });
   }
@@ -200,16 +214,15 @@ function MeasurePage() {
     setError(null);
     // Marquage INSTANTANÉ — un clic = un point ajouté immédiatement.
     // Utilise la dernière position filtrée (Kalman) si dispo, sinon le brut.
-    // Aucun compteur d'échantillons, aucun overlay bloquant.
     const src = filteredCur ?? current;
     if (!src) {
       feedbackError();
       setError("Position GPS non encore reçue. Patientez quelques secondes.");
       return;
     }
-    if (src.accuracy > DEFAULT_GPS_CONFIG.maxAcceptableAccuracy * 2) {
+    if (src.accuracy > gpsConfig.maxAcceptableAccuracy * 2) {
       feedbackError();
-      setError(`Précision insuffisante (±${src.accuracy.toFixed(0)} m). Attendez un meilleur signal.`);
+      setError(`Précision insuffisante (±${src.accuracy.toFixed(0)} m, seuil calibré ${gpsConfig.maxAcceptableAccuracy} m). Attendez un meilleur signal.`);
       return;
     }
     const p: MeasurementPoint = {
@@ -231,10 +244,33 @@ function MeasurePage() {
     lastAutoRef.current = null;
   }
 
+  /** Ouvre le contrôle terrain : rien n'est enregistré avant sa réussite. */
+  function runFieldCheck(submit: boolean) {
+    const res = validateFieldMeasurement(points, {
+      maxAcceptableAccuracyM: gpsConfig.maxAcceptableAccuracy,
+      calibration,
+      acceptedSamples: acceptedCount,
+    });
+    setFieldCheck(res);
+    setPendingSubmit(submit);
+    setCheckOpen(true);
+    if (!res.ok) feedbackError();
+  }
+
   async function save(submit: boolean) {
     if (!user) return;
-    if (points.length < 3) { setError("Au moins 3 points sont nécessaires."); return; }
     if (!isBrowser()) return;
+    const check = validateFieldMeasurement(points, {
+      maxAcceptableAccuracyM: gpsConfig.maxAcceptableAccuracy,
+      calibration,
+      acceptedSamples: acceptedCount,
+    });
+    if (!check.ok) {
+      setFieldCheck(check);
+      setCheckOpen(true);
+      feedbackError();
+      return;
+    }
     const accVals = accSamples.filter((a) => a < 999).sort((a, b) => a - b);
     const median = accVals[Math.floor(accVals.length / 2)] ?? bestAcc;
     const m: Measurement = {
@@ -249,20 +285,41 @@ function MeasurePage() {
       unit,
       deviceProfile: {
         userAgent: navigator.userAgent, platform: navigator.platform,
-        estimatedTier: estimateDeviceTier(bestAcc),
+        estimatedTier: calibration?.tier ?? estimateDeviceTier(bestAcc),
         bestAccuracyM: bestAcc, medianAccuracyM: median,
         samplesCount: acceptedCount + rejectedCount,
       },
       qa: {
         acceptedCount, rejectedCount,
-        maxAcceptableAccuracyM: DEFAULT_GPS_CONFIG.maxAcceptableAccuracy,
+        maxAcceptableAccuracyM: gpsConfig.maxAcceptableAccuracy,
         bestAccuracyM: bestAcc, medianAccuracyM: median,
         liveAccuracyM: filteredCur?.accuracy,
         history: qaHistory.map((q) => ({ ts: q.ts, accuracyM: q.acc, accepted: q.ok })),
+        calibration: calibration
+          ? {
+              samples: calibration.samples,
+              bestAccuracyM: calibration.bestAccuracyM,
+              medianAccuracyM: calibration.medianAccuracyM,
+              scatterM: calibration.scatterM,
+              recommendedMaxAccuracyM: calibration.recommendedMaxAccuracyM,
+              tier: calibration.tier,
+              quality: calibration.quality,
+              at: Date.now() - calibration.durationMs,
+            }
+          : null,
+        pauses,
+        fieldCheck: {
+          ok: check.ok,
+          closureM: check.closureM,
+          minSegmentM: check.minSegmentM,
+          maxAccuracyM: check.maxAccuracyM,
+          issues: check.issues,
+        },
       },
     };
     await db().measurements.put(m);
     feedbackSuccess();
+    setCheckOpen(false);
     if (submit) await notify("Mesure soumise", `Levé envoyé (${formatArea(m.areaM2, m.unit)}).`, { tag: "submit" });
     navigate({ to: "/app/parcelles/$id", params: { id: m.id } });
   }
